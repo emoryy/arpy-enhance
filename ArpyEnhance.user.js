@@ -1,11 +1,12 @@
 // ==UserScript==
 // @name         ArpyEnhance
-// @namespace    hu.destr4ct
+// @namespace    hu.emoryy
 // @version      0.2
 // @description  enhances Arpy
 // @author       Emoryy
 // @require      https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/6.18.2/babel.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/babel-polyfill/6.16.0/polyfill.js
+// @require      https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.18.1/moment.min.js
 // @include      http://arpy.dbx.hu/timelog*
 // ==/UserScript==
 
@@ -211,7 +212,7 @@ A szöveget tetszés szerint lehet tagolni üres sorokkal, a sorokat pedig bárm
     });
     $("#submit-batch-button").button().on( "click", function() {
       console.log("batch button pressed");
-
+      status('');
       const textareaValue = $('#batch-textarea').val();
       if(!textareaValue || !(textareaValue.trim())) {
         status("Üres batch data", "error");
@@ -234,8 +235,12 @@ A szöveget tetszés szerint lehet tagolni üres sorokkal, a sorokat pedig bárm
       }
       let everythingIsOk = true;
       const parsedBatchData = textareaValue.match(/[^\r\n]+/g).map(function(line) {
-        const lineParts = line.trim().split(' ');
-        if ((lineParts.length === 1) && (lineParts[0].indexOf(':') === lineParts[0].length - 1)) {
+        const trimmedLine = line.trim();
+        if (!trimmedLine || trimmedLine[0] === '#') {
+          return;
+        }
+        const lineParts = trimmedLine.replace(/\s\s+/g, ' ').split(' ');
+        if ((lineParts[0].indexOf(':') === lineParts[0].length - 1)) {
           // we have a projectinfo label
           const label = lineParts[0].split(':')[0];
           const fav = favorites.find((f) => f.label === label);
@@ -247,8 +252,15 @@ A szöveget tetszés szerint lehet tagolni üres sorokkal, a sorokat pedig bárm
             };
             console.log('currentProjectData', currentProjectData);
           }
+          if (lineParts.length === 1) { // it was only a label
+            return;
+          } else { // it was on the beginning of a line, we can process further
+            lineParts.shift();
+          }
+        } else if (lineParts.length === 1) {
           return;
         }
+
         if (!currentProjectData) {
           everythingIsOk = false;
           return;
@@ -257,7 +269,8 @@ A szöveget tetszés szerint lehet tagolni üres sorokkal, a sorokat pedig bárm
         // Assembling batchItem
 
         const dateStr = lineParts.shift();
-        const date = dateStr.length === 5 ? (new Date()).getFullYear()+'-'+dateStr : dateStr ;
+        const formattedParsedDate = moment(dateStr, ['YYYY-MM-DD', 'MM-DD']).format('YYYY-MM-DD');
+        console.log('formattedParsedDate', formattedParsedDate);
         const hours = lineParts.shift();
         const description = lineParts.join(' ');
 
@@ -265,7 +278,7 @@ A szöveget tetszés szerint lehet tagolni üres sorokkal, a sorokat pedig bárm
           genericFormData,
           currentProjectData,
           {
-            'time_entry[date]': date,
+            'time_entry[date]': formattedParsedDate,
             'time_entry[hours]': hours,
             'time_entry[description]': description
           }
@@ -278,7 +291,10 @@ A szöveget tetszés szerint lehet tagolni üres sorokkal, a sorokat pedig bárm
 
       let i = 0;
       const total = parsedBatchData.length;
-      console.log('parsedBatchData', parsedBatchData);
+      //console.log('parsedBatchData', parsedBatchData);
+      parsedBatchData.forEach(function(bd) {
+        console.log(bd.project_id, bd.todo_list_id, bd.todo_item_id, bd["time_entry[date]"], bd["time_entry[hours]"], bd["time_entry[description]"]);
+      });
       const postBatch = function(data, textStatus, jqXHR) {
         status(`Ready: ${i}/${total}`);
         i++;
