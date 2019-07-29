@@ -6,15 +6,15 @@
 // @author       Emoryy
 // @require      https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/6.18.2/babel.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/babel-polyfill/6.16.0/polyfill.js
-// @require      https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.18.1/moment.min.js
+// @require      https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js
 // @include      http://arpy.dbx.hu/timelog*
 // ==/UserScript==
 
 /* jshint ignore:start */
 var inline_src = (<><![CDATA[
-/* jshint ignore:end */
-    /* jshint esnext: false */
-    /* jshint esversion: 6 */
+  /* jshint ignore:end */
+  /* jshint esnext: false */
+  /* jshint esversion: 6 */
 
   (function() {
     'use strict';
@@ -64,26 +64,26 @@ var inline_src = (<><![CDATA[
       .i {
         font-size: 16px;
       }
-#favorites-container {
-}
-#favorites-list {
-  list-style: none;
-  margin-left: -40px;
-  margin-right: 20px;
-}
-#favorites-list li {
-  padding: 3px;
-}
+      #favorites-container {
+      }
+      #favorites-list {
+        list-style: none;
+        margin-left: -40px;
+        margin-right: 20px;
+      }
+      #favorites-list li {
+        padding: 3px;
+      }
 
-#favorites-list li input{
-  padding: 0 5px !important;
-  border: 1px solid transparent;
-  background: transparent;
-}
-#favorites-list li input:hover, #favorites-list li input:focus {
-  border: 1px solid #777;
-  background: white;
-}
+      #favorites-list li input{
+        padding: 0 5px !important;
+        border: 1px solid transparent;
+        background: transparent;
+      }
+      #favorites-list li input:hover, #favorites-list li input:focus {
+        border: 1px solid #777;
+        background: white;
+      }
     `);
 
     function status(description, level) {
@@ -101,16 +101,12 @@ var inline_src = (<><![CDATA[
       ["project_id", "todo_list_id", "todo_item_id"].forEach(
         (propName) => {
           const formDataItem = formData.find((item) => item.name === propName);
-          //if (!formDataItem || !formDataItem.value) {
-            //saveable = false;
-          //} else {
           if (formDataItem) {
             fav[propName] = {
               label: $(`form[action="/timelog"] [value="${formDataItem.value}"]`).html(),
               value: formDataItem.value
             };
           }
-          //}
         }
       );
       if (!saveable) {
@@ -120,6 +116,7 @@ var inline_src = (<><![CDATA[
       saveFavorites();
       displayFavoriteElement(fav);
     }
+
     function saveFavorites() {
       window.localStorage.favorites = JSON.stringify(favorites);
     }
@@ -129,16 +126,19 @@ var inline_src = (<><![CDATA[
       fav.label = label ? label : "";
       saveFavorites();
     }
+
     function remove(array, element) {
       return array.filter(e => e !== element);
     }
 
     function displayFavoriteElement(fav) {
-      const newLi = $(`<li> 
-           <span class="label label-info">${fav.project_id && fav.project_id.label}</span>
-           <span class="label label-info">${fav.todo_list_id && fav.todo_list_id.label || '-'}</span>
-           <span class="label label-info">${fav.todo_item_id && fav.todo_item_id.label || '-'}</span>
-         </li>`);
+      const newLi = $(`
+        <li>
+          <span class="label label-info">${fav.project_id && fav.project_id.label}</span>
+          <span class="label label-info">${fav.todo_list_id && fav.todo_list_id.label || '-'}</span>
+          <span class="label label-info">${fav.todo_item_id && fav.todo_item_id.label || '-'}</span>
+        </li>
+      `);
       const labelInput = $('<input placeholder="- címke helye -">');
       labelInput.val(fav.label);
       labelInput.change(function(...args) {
@@ -153,20 +153,24 @@ var inline_src = (<><![CDATA[
       newLi.append(removeButton);
       $('#favorites-list').append(newLi);
     }
+
     function renderFavs() {
       $('#favorites-list').empty();
       favorites.forEach(displayFavoriteElement);
     }
+
     function removeFav(id) {
       const fav = favorites.find((f) => f.id === id);
       favorites = remove(favorites, fav);
       saveFavorites();
       renderFavs();
     }
+
     try {
       favorites = JSON.parse(window.localStorage.favorites);
     } catch(e) {
     }
+
     const placeholderText = `-- Formátum help --
 Gyors példa:
 
@@ -174,37 +178,72 @@ Gyors példa:
 demo:
   10-02 1.5 taszk leírás 2
   10-03 2.5 taszk leírás 3
+# ez egy komment sor
 insnet:
   10-04 8.0 taszk leírás 4
 
-A munkaidő bejegyzéseket soronként kell megadni, egy sor formátuma a következő:
+A munkaidő bejegyzéseket soronként kell megadni. Az inputot tetszés szerint lehet tagolni üres sorokkal, a sorokat pedig bármennyi szóközzel beljebb lehet igazítani, a feldolgozó ezeket figyelmen kívül hagyja. #-vel kezdődő sor kommentnek számít.
+Munkaidő bejegyzést tartalmazó sor formátuma a következő:
 
 12-26 4.0 Ez itt a leírás szövege
 - vagy -
 2016-12-26 3.0 Ez itt a leírás szövege
 
-A sorokat az első két előforduló szóköz osztja 3 részre.
-1. Dátum/idő. Az év opcionális, ha nincs megadva, akkor automatikusan az aktuális év lesz érvényes a sorra.
-2. Munkaórák száma. Ez lehet egész szám vagy tizedes tört ponttal jelölve.
-3. Leírás szövege. (A sor teljes hátralévő része)
+A sorokat az első két előforduló szóköz osztja 3 részre (a behúzás nem számít).
+1. Dátum/idő.
+  YYYY-MM-DD vagy MM-DD, az év tehát opcionális. Ha nincs megadva, akkor automatikusan az aktuális év lesz érvényes a sorra.
+2. Munkaórák száma.
+  Ez lehet egész szám vagy tizedes tört ponttal jelölve.
+3. Leírás szövege.
+  Ez a sor teljes hátralévő része, a közben előforduló szóközökkel együtt.
 
-Kategóriák meghatározása:
-Alapesetben minden sorra a fenti lenyílókban aktuálisan kiválasztott értékek lesznek érvényesek.
+Dátumcímkék használata
+
+A dátumokat meg lehet adni címkeként is a @ karakterrel kezdve.
+Ha munkaidő bejegyzést tartalmazó sorban szimplán csak egy kötőjelet adunk meg dátum helyett, akkor a legutóbbi @ dátum címke értéke lesz érvényes rá.
+A sorban explicit módon megadott dátum nem íródik felül címke értékkel.
+Ha kötőjeles dátumos sor előtt nem szerepelt még dátumcímke, akkor a mai nap lesz megadva dátumként.
+
+példa:
+# ez a mai napon volt
+- 2.4 nahát
+@10-12
+  - 2.4 ötös taszk
+  - 1.4 hatos taszk
+  10-11 3.2 előtte való napon történt
+  - 2.0 még egy taszk 10-12-re
+
+Kategóriák:
+Alapesetben minden sorra a fenti legördülő mezőkben aktuálisan kiválasztott értékek lesznek érvényesek.
 A gyakrabban használt kategóriákat el lehet menteni a kedvencek közé a ★Fav gombbal.
 A hozzáadás után a kedvenceket címkével kell ellátni, mert ezekkel tudunk hivatkozni rájuk.
 
-Az input szövegben a címkéket külön sorba kell írni, a címke után pedig kettőspontot kell rakni.
+Az input szövegben a kategóriacímkék végére kettőspontot kell rakni.
 A fenti gyors példában a taszk 1 a lenyílókban aktuálisan kiválasztott kategóriákat fogja megkapni, a taszk 2 és taszk 3 a demo címkével ellátott kedvenc kategóriáit, a taszk 4 pedig az insnet kategóriáit.
+A kategóriacímke hatása a dátumcímkéhez hasonlóan a következő kategóriacímkéig érvényes.
 
-A szöveget tetszés szerint lehet tagolni üres sorokkal, a sorokat pedig bármennyi szóközzel beljebb lehet igazítani, a feldolgozó ezeket figyelmen kívül hagyja.
 `.replace(/\n/g, "\n");
 
-    $("#time_entry_submit").before('<span id="status"></span>&nbsp;');
-    $("#time_entry_submit").before('<button class="btn btn-primary btn-large" type="button" id="submit-batch-button">Mentés!</button>&nbsp;');
-    $("#time_entry_description").after(`<textarea id="batch-textarea" placeholder="${placeholderText}" class="textarea ui-widget-content ui-corner-all"></textarea>`);
-    $("#time_entry_container").append('<div id="favorites-container"><ul id="favorites-list" class="well"></ul></div>');
-    $("#todo_item_id").after('<button class="btn btn-primary btn-sm" type="button" id="add-fav-button"><span class="i">★</span> Fav</button>');
+    $("#time_entry_submit").before(`
+      <span id="status"></span>&nbsp;
+      <div id="enhance-progress" class="progress progress-striped active" style="display: none;">
+        <div id="enhance-progress-bar" class="bar"></div>
+      </div>
+    `);
+    $("#time_entry_submit").before(
+      '<button class="btn btn-primary btn-large" type="button" id="submit-batch-button">Mentés!</button>&nbsp;'
+    );
+    $("#time_entry_description").after(
+      `<textarea id="batch-textarea" placeholder="${placeholderText}" class="textarea ui-widget-content ui-corner-all"></textarea>`
+    );
+    $("#time_entry_container").append(
+      '<div id="favorites-container"><ul id="favorites-list" class="well"></ul></div>'
+    );
+    $("#todo_item_id").after(
+      '<button class="btn btn-primary btn-sm" type="button" id="add-fav-button"><span class="i">★</span> Fav</button>'
+    );
     $("#add-fav-button").button().on( "click", addNewFavorite);
+
 
     renderFavs();
     $("#batch-textarea").on('focus', function(){
@@ -229,12 +268,13 @@ A szöveget tetszés szerint lehet tagolni üres sorokkal, a sorokat pedig bárm
         }
       });
 
+      let currentDate = moment();
       let currentProjectData = null;
       if (Object.keys(projectData).length === 3) {
         currentProjectData = projectData;
       }
-      let everythingIsOk = true;
-      const parsedBatchData = textareaValue.match(/[^\r\n]+/g).map(function(line) {
+      const errors = [];
+      const parsedBatchData = textareaValue.match(/[^\r\n]+/g).map(function(line, lineNumber) {
         const trimmedLine = line.trim();
         if (!trimmedLine || trimmedLine[0] === '#') {
           return;
@@ -257,20 +297,58 @@ A szöveget tetszés szerint lehet tagolni üres sorokkal, a sorokat pedig bárm
           } else { // it was on the beginning of a line, we can process further
             lineParts.shift();
           }
-        } else if (lineParts.length === 1) {
-          return;
         }
 
         if (!currentProjectData) {
-          everythingIsOk = false;
+          errors.push(`${lineNumber + 1}. sor: Kategória információ hiányzik`);
+          return;
+        }
+
+        function parseDateStr(dateStr) {
+          const momentizedDate = moment(dateStr, ['YYYY-MM-DD', 'MM-DD']);
+          if (!momentizedDate.isValid()) {
+            errors.push(`${lineNumber + 1}. sor: hibás dátumformátum!`);
+            return null;
+          }
+          return momentizedDate;
+        }
+
+        if (lineParts[0][0] === '@') {
+          const dateLabelStr = lineParts[0].substr(1);
+          currentDate = parseDateStr(dateLabelStr);
+          if (lineParts.length === 1) { // it was only a label
+            return;
+          } else { // it was on the beginning of a line, we can process further
+            lineParts.shift();
+            if (lineParts.length === 2) {
+              lineParts.unshift("-");
+            }
+          }
+        }
+
+        if (lineParts.length === 1) {
+          errors.push(`${lineNumber + 1}. sor: Hibás formátumú sor`);
           return;
         }
 
         // Assembling batchItem
 
         const dateStr = lineParts.shift();
-        const formattedParsedDate = moment(dateStr, ['YYYY-MM-DD', 'MM-DD']).format('YYYY-MM-DD');
-        console.log('formattedParsedDate', formattedParsedDate);
+        let parsedDate;
+        if (dateStr === '-') {
+          if (!currentDate) {
+            errors.push(`${lineNumber + 1}. sor: dátum címke hiányzik!`);
+            return;
+          }
+          parsedDate = currentDate;
+        } else {
+          parsedDate = parseDateStr(dateStr);
+          if (!parsedDate) {
+            return;
+          }
+        }
+        const formattedDate = parsedDate.format('YYYY-MM-DD');
+
         const hours = lineParts.shift();
         const description = lineParts.join(' ');
 
@@ -278,15 +356,15 @@ A szöveget tetszés szerint lehet tagolni üres sorokkal, a sorokat pedig bárm
           genericFormData,
           currentProjectData,
           {
-            'time_entry[date]': formattedParsedDate,
+            'time_entry[date]': formattedDate,
             'time_entry[hours]': hours,
             'time_entry[description]': description
           }
         );
       }).filter((item) => !!item);
 
-      if (!everythingIsOk) {
-        return status("Nincs meghatározva a projekt/kategória!", "error");
+      if (errors.length) {
+        return status(errors.join(' <br> '), "error");
       }
 
       let i = 0;
@@ -295,11 +373,21 @@ A szöveget tetszés szerint lehet tagolni üres sorokkal, a sorokat pedig bárm
       parsedBatchData.forEach(function(bd) {
         console.log(bd.project_id, bd.todo_list_id, bd.todo_item_id, bd["time_entry[date]"], bd["time_entry[hours]"], bd["time_entry[description]"]);
       });
+      const progressElement = window.document.getElementById("enhance-progress");
+      progressElement.style.display = "block";
+      const progressElementBar = window.document.getElementById("enhance-progress-bar");
+      progressElementBar.style.width = `0%`;
       const postBatch = function(data, textStatus, jqXHR) {
         status(`Ready: ${i}/${total}`);
+        progressElementBar.style.width = `${i / total * 100}%`;
         i++;
-        if(parsedBatchData.length) {
+        if (parsedBatchData.length) {
           $.post('/timelog', parsedBatchData.shift(), postBatch);
+          /*window.setTimeout(() => {
+            console.log(parsedBatchData.shift());
+
+            postBatch();
+          }, 1000);*/
         } else {
           window.location.reload();
         }
