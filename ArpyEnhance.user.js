@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ArpyEnhance
 // @namespace    hu.emoryy
-// @version      0.2
+// @version      0.4
 // @description  enhances Arpy
 // @author       Emoryy
 // @require      https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/6.18.2/babel.js
@@ -18,6 +18,9 @@ var inline_src = (<><![CDATA[
 
   (function() {
     'use strict';
+
+    const debug = false;
+
     let favorites = [];
     function addCss(cssString) {
       const head = document.getElementsByTagName('head')[0];
@@ -175,11 +178,11 @@ var inline_src = (<><![CDATA[
 Gyors példa:
 
 10-01 1.0 taszk leírás 1
-demo:
+demo
   10-02 1.5 taszk leírás 2
   10-03 2.5 taszk leírás 3
 # ez egy komment sor
-insnet:
+insnet
   10-04 8.0 taszk leírás 4
 
 A munkaidő bejegyzéseket soronként kell megadni. Az inputot tetszés szerint lehet tagolni üres sorokkal, a sorokat pedig bármennyi szóközzel beljebb lehet igazítani, a feldolgozó ezeket figyelmen kívül hagyja. #-vel kezdődő sor kommentnek számít.
@@ -199,15 +202,15 @@ A sorokat az első két előforduló szóköz osztja 3 részre (a behúzás nem 
 
 Dátumcímkék használata
 
-A dátumokat meg lehet adni címkeként is a @ karakterrel kezdve.
-Ha munkaidő bejegyzést tartalmazó sorban szimplán csak egy kötőjelet adunk meg dátum helyett, akkor a legutóbbi @ dátum címke értéke lesz érvényes rá.
+A dátumokat meg lehet adni címkeként is.
+Ha munkaidő bejegyzést tartalmazó sorban szimplán csak egy kötőjelet adunk meg dátum helyett, akkor a legutóbbi dátum címke értéke lesz érvényes rá.
 A sorban explicit módon megadott dátum nem íródik felül címke értékkel.
 Ha kötőjeles dátumos sor előtt nem szerepelt még dátumcímke, akkor a mai nap lesz megadva dátumként.
 
 példa:
 # ez a mai napon volt
 - 2.4 nahát
-@10-12
+10-12
   - 2.4 ötös taszk
   - 1.4 hatos taszk
   10-11 3.2 előtte való napon történt
@@ -280,23 +283,23 @@ A kategóriacímke hatása a dátumcímkéhez hasonlóan a következő kategóri
           return;
         }
         const lineParts = trimmedLine.replace(/\s\s+/g, ' ').split(' ');
-        if ((lineParts[0].indexOf(':') === lineParts[0].length - 1)) {
-          // we have a projectinfo label
-          const label = lineParts[0].split(':')[0];
-          const fav = favorites.find((f) => f.label === label);
-          if (fav) {
-            currentProjectData = {
-              project_id: fav.project_id.value,
-              todo_list_id: fav.todo_list_id.value,
-              todo_item_id: fav.todo_item_id.value
-            };
-            console.log('currentProjectData', currentProjectData);
+
+        if (lineParts.length === 1) {
+          const maybeDate = moment(lineParts[0], ['YYYY-MM-DD', 'MM-DD'], true);
+          if (maybeDate.isValid()) {
+            currentDate = maybeDate;
+          } else {
+            const fav = favorites.find((f) => f.label === lineParts[0]);
+            if (fav) {
+              currentProjectData = {
+                project_id: fav.project_id.value,
+                todo_list_id: fav.todo_list_id.value,
+                todo_item_id: fav.todo_item_id.value
+              };
+
+            }
           }
-          if (lineParts.length === 1) { // it was only a label
-            return;
-          } else { // it was on the beginning of a line, we can process further
-            lineParts.shift();
-          }
+          return;
         }
 
         if (!currentProjectData) {
@@ -305,30 +308,12 @@ A kategóriacímke hatása a dátumcímkéhez hasonlóan a következő kategóri
         }
 
         function parseDateStr(dateStr) {
-          const momentizedDate = moment(dateStr, ['YYYY-MM-DD', 'MM-DD']);
+          const momentizedDate = moment(dateStr, ['YYYY-MM-DD', 'MM-DD'], true);
           if (!momentizedDate.isValid()) {
             errors.push(`${lineNumber + 1}. sor: hibás dátumformátum!`);
             return null;
           }
           return momentizedDate;
-        }
-
-        if (lineParts[0][0] === '@') {
-          const dateLabelStr = lineParts[0].substr(1);
-          currentDate = parseDateStr(dateLabelStr);
-          if (lineParts.length === 1) { // it was only a label
-            return;
-          } else { // it was on the beginning of a line, we can process further
-            lineParts.shift();
-            if (lineParts.length === 2) {
-              lineParts.unshift("-");
-            }
-          }
-        }
-
-        if (lineParts.length === 1) {
-          errors.push(`${lineNumber + 1}. sor: Hibás formátumú sor`);
-          return;
         }
 
         // Assembling batchItem
@@ -382,14 +367,16 @@ A kategóriacímke hatása a dátumcímkéhez hasonlóan a következő kategóri
         progressElementBar.style.width = `${i / total * 100}%`;
         i++;
         if (parsedBatchData.length) {
-          $.post('/timelog', parsedBatchData.shift(), postBatch);
-          /*window.setTimeout(() => {
-            console.log(parsedBatchData.shift());
-
-            postBatch();
-          }, 1000);*/
+          if (!debug) {
+            $.post('/timelog', parsedBatchData.shift(), postBatch);
+          } else {
+            window.setTimeout(() => {
+              console.log(parsedBatchData.shift());
+              postBatch();
+            }, 10);
+          }
         } else {
-          window.location.reload();
+          if (!debug) { window.location.reload(); }
         }
       };
       postBatch();
