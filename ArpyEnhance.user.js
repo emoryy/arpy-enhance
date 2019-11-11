@@ -185,14 +185,14 @@ demo
 insnet
   10-04 8.0 taszk leírás 4
 
-A munkaidő bejegyzéseket soronként kell megadni. Az inputot tetszés szerint lehet tagolni üres sorokkal, a sorokat pedig bármennyi szóközzel beljebb lehet igazítani, a feldolgozó ezeket figyelmen kívül hagyja. #-vel kezdődő sor kommentnek számít.
+A munkaidő bejegyzéseket soronként kell megadni. Az inputot tetszés szerint lehet tagolni üres sorokkal, a sorokat pedig bármennyi szóközzel beljebb lehet igazítani, a feldolgozó ezeket figyelmen kívül hagyja. #-vel kezdődő sor kommentnek számít. Csak a soreleji # számít kommentnek.
 Munkaidő bejegyzést tartalmazó sor formátuma a következő:
 
 12-26 4.0 Ez itt a leírás szövege
 - vagy -
 2016-12-26 3.0 Ez itt a leírás szövege
 
-A sorokat az első két előforduló szóköz osztja 3 részre (a behúzás nem számít).
+A sorokat az első két előforduló szóköz osztja 3 részre (a soreleji behúzás nem számít).
 1. Dátum/idő.
   YYYY-MM-DD vagy MM-DD, az év tehát opcionális. Ha nincs megadva, akkor automatikusan az aktuális év lesz érvényes a sorra.
 2. Munkaórák száma.
@@ -204,7 +204,7 @@ Dátumcímkék használata
 
 A dátumokat meg lehet adni címkeként is.
 Ha munkaidő bejegyzést tartalmazó sorban szimplán csak egy kötőjelet adunk meg dátum helyett, akkor a legutóbbi dátum címke értéke lesz érvényes rá.
-A sorban explicit módon megadott dátum nem íródik felül címke értékkel.
+Egy sorban a sor elején explicit módon megadott dátum nem íródik felül címke értékkel.
 Ha kötőjeles dátumos sor előtt nem szerepelt még dátumcímke, akkor a mai nap lesz megadva dátumként.
 
 példa:
@@ -221,9 +221,9 @@ Alapesetben minden sorra a fenti legördülő mezőkben aktuálisan kiválasztot
 A gyakrabban használt kategóriákat el lehet menteni a kedvencek közé a ★Fav gombbal.
 A hozzáadás után a kedvenceket címkével kell ellátni, mert ezekkel tudunk hivatkozni rájuk.
 
-Az input szövegben a kategóriacímkék végére kettőspontot kell rakni.
 A fenti gyors példában a taszk 1 a lenyílókban aktuálisan kiválasztott kategóriákat fogja megkapni, a taszk 2 és taszk 3 a demo címkével ellátott kedvenc kategóriáit, a taszk 4 pedig az insnet kategóriáit.
-A kategóriacímke hatása a dátumcímkéhez hasonlóan a következő kategóriacímkéig érvényes.
+A címkék hatása mindig a következő ugyanolyan típusú (kategória vagy dátum) címkéig érvényes.
+
 
 `.replace(/\n/g, "\n");
 
