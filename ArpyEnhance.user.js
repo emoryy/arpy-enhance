@@ -8,6 +8,7 @@
 // @require      https://cdnjs.cloudflare.com/ajax/libs/babel-polyfill/6.16.0/polyfill.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js
 // @include      http://arpy.dbx.hu/timelog*
+// @downloadURL  https://github.com/emoryy/arpy-enhance/blob/master/ArpyEnhance.user.js
 // ==/UserScript==
 
 /* jshint ignore:start */
