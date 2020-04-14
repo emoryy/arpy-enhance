@@ -88,6 +88,28 @@ var inline_src = (<><![CDATA[
         border: 1px solid #777;
         background: white;
       }
+#preview-container {
+  position: absolute;
+  top: 60px;
+  left: 50%;
+  margin-left: 520px;
+  white-space: nowrap;
+}
+#preview-container td,
+#preview-container th {
+  font-size: 9px;
+  font-family: monospace;
+  text-align: left;
+  line-height: 10px;
+}
+#preview-container td:first-child {
+  padding-left: 5px;
+}
+#preview-container table {
+  margin-left: -10px;
+  margin-bottom: 10px;
+}
+
     `);
 
     function status(description, level) {
@@ -471,7 +493,7 @@ A címkék hatása mindig a következő ugyanolyan típusú (kategória vagy dá
     $("#submit-batch-button").button().on( "click", function() {
       console.log("batch button pressed");
       status('');
-      const parsedBatchData = parseBatchData();
+      const parsedBatchData = parseBatchData().data;
 
       const progressElement = window.document.getElementById("enhance-progress");
       progressElement.style.display = "block";
