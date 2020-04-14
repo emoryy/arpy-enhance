@@ -235,13 +235,15 @@ A címkék hatása mindig a következő ugyanolyan típusú (kategória vagy dá
       </div>
     `);
     $("#time_entry_submit").before(
-      '<button class="btn btn-primary btn-large" type="button" id="submit-batch-button">Mentés!</button>&nbsp;'
+      `<button class="btn btn-primary btn-large" type="button" id="preview-button">Előnézet</button>
+      <button class="btn btn-primary btn-large" type="button" id="submit-batch-button">Mentés!</button>&nbsp;`
     );
     $("#time_entry_description").after(
       `<textarea id="batch-textarea" placeholder="${placeholderText}" class="textarea ui-widget-content ui-corner-all"></textarea>`
     );
     $("#time_entry_container").append(
-      '<div id="favorites-container"><ul id="favorites-list" class="well"></ul></div>'
+      `<div id="preview-container" class="well"></div>
+<div id="favorites-container"><ul id="favorites-list" class="well"></ul></div>`
     );
     $("#todo_item_id").after(
       '<button class="btn btn-primary btn-sm" type="button" id="add-fav-button"><span class="i">★</span> Fav</button>'
@@ -253,13 +255,11 @@ A címkék hatása mindig a következő ugyanolyan típusú (kategória vagy dá
     $("#batch-textarea").on('focus', function(){
       $(this).addClass('active');
     });
-    $("#submit-batch-button").button().on( "click", function() {
-      console.log("batch button pressed");
-      status('');
+
+    const parseBatchData = function() {
       const textareaValue = $('#batch-textarea').val();
       if(!textareaValue || !(textareaValue.trim())) {
-        status("Üres batch data", "error");
-        return;
+        return { errors: ["no data"] };
       }
       const genericFormDataSerialized = $('form[action="/timelog"]').serializeArray();
       const projectData = {};
@@ -278,6 +278,13 @@ A címkék hatása mindig a következő ugyanolyan típusú (kategória vagy dá
         currentProjectData = projectData;
       }
       const errors = [];
+
+      const summarizedData = {
+        labels: {
+        },
+        dates: {
+        }
+      }
       const parsedBatchData = textareaValue.match(/[^\r\n]+/g).map(function(line, lineNumber) {
         const trimmedLine = line.trim();
         if (!trimmedLine || trimmedLine[0] === '#') {
@@ -293,6 +300,7 @@ A címkék hatása mindig a következő ugyanolyan típusú (kategória vagy dá
             const fav = favorites.find((f) => f.label === lineParts[0]);
             if (fav) {
               currentProjectData = {
+                label: fav.label,
                 project_id: fav.project_id.value,
                 todo_list_id: fav.todo_list_id.value,
                 todo_item_id: fav.todo_item_id.value
@@ -302,6 +310,8 @@ A címkék hatása mindig a következő ugyanolyan típusú (kategória vagy dá
           }
           return;
         }
+
+        const label = (currentProjectData && currentProjectData.label) || "";
 
         if (!currentProjectData) {
           errors.push(`${lineNumber + 1}. sor: Kategória információ hiányzik`);
@@ -338,31 +348,139 @@ A címkék hatása mindig a következő ugyanolyan típusú (kategória vagy dá
         const hours = lineParts.shift();
         const description = lineParts.join(' ');
 
-        return Object.assign({},
+        const outputDataObject = Object.assign({},
           genericFormData,
-          currentProjectData,
           {
+            project_id: currentProjectData.project_id,
+            todo_list_id: currentProjectData.todo_list_id,
+            todo_item_id: currentProjectData.todo_item_id,
             'time_entry[date]': formattedDate,
             'time_entry[hours]': hours,
             'time_entry[description]': description
           }
         );
+
+        const parsedHours = Number.parseFloat(hours);
+
+        // append summarized data by date
+
+        let byDate = summarizedData.dates[formattedDate];
+        if (!byDate) {
+          byDate = {
+            sum: 0,
+            entries: []
+          };
+          summarizedData.dates[formattedDate] = byDate;
+        }
+        byDate.sum += parsedHours;
+        byDate.entries.push(outputDataObject);
+
+        // append summarized data by label
+
+        let byLabel = summarizedData.labels[label];
+        if (!byLabel) {
+          byLabel = {
+            sum: 0,
+            entries: []
+          };
+          summarizedData.labels[label] = byLabel;
+        }
+        byLabel.sum += parsedHours;
+        byLabel.entries.push(outputDataObject);
+
+        return outputDataObject;
       }).filter((item) => !!item);
 
       if (errors.length) {
-        return status(errors.join(' <br> '), "error");
+        return { errors };
       }
 
-      let i = 0;
-      const total = parsedBatchData.length;
       //console.log('parsedBatchData', parsedBatchData);
-      parsedBatchData.forEach(function(bd) {
-        console.log(bd.project_id, bd.todo_list_id, bd.todo_item_id, bd["time_entry[date]"], bd["time_entry[hours]"], bd["time_entry[description]"]);
-      });
+      //parsedBatchData.forEach(function(bd) {
+      //  console.log(bd.project_id, bd.todo_list_id, bd.todo_item_id, bd["time_entry[date]"], bd["time_entry[hours]"], bd["time_entry[description]"]);
+      //});
+
+      return { data: parsedBatchData, summarizedData };
+    }
+
+    document.getElementById('batch-textarea').addEventListener('input', function(ev) {
+      const result = parseBatchData();
+      console.log("result", result);
+      const previewContainer = document.getElementById("preview-container");
+      previewContainer.innerHTML = "";
+      if (result.errors) {
+        const list = document.createElement("ul");
+        previewContainer.appendChild(list);
+
+        errors.forEach((error) => {
+          const errorItem = document.createElement("li");
+          errorItem.innerHTML = error;
+          list.appendChild(errorItem);
+        });
+      }
+      if (result.summarizedData) {
+        ["dates", "labels"].forEach((sumType) => {
+          const data = result.summarizedData[sumType];
+          const table = document.createElement("table");
+
+          previewContainer.appendChild(table);
+          Object.entries(data).forEach(([key, value]) => {
+            const sumRow = document.createElement("tr");
+            table.appendChild(sumRow);
+            const catTh = document.createElement("th");
+            catTh.innerHTML = key;
+            sumRow.appendChild(catTh);
+            const sumTh = document.createElement("th");
+            sumTh.innerHTML = value.sum;
+            sumRow.appendChild(sumTh);
+
+            value.entries.forEach((row, i) => {
+              //let header;
+              /*if (i === 0) {
+                header = document.createElement("tr");
+                table.appendChild(header);
+              }*/
+              const tr = document.createElement("tr");
+              table.appendChild(tr);
+              Object.entries(row).forEach(([key, value]) => {
+                if (!["time_entry[date]", "time_entry[hours]", "time_entry[description]"].includes(key)) {
+                  return;
+                }
+                /*if (i === 0) {
+                  const th = document.createElement("th");
+                  th.innerHTML = key;
+                  header.appendChild(th);
+                }*/
+                const cell = document.createElement("td");
+                cell.innerHTML = value;
+                tr.appendChild(cell);
+              });
+            });
+          });
+
+        });
+
+      }
+    });
+
+    $("#preview-button").button().on( "click", function() {
+      const parseResult = parseBatchData();
+      console.log("parsedBatchData", parseResult);
+    });
+
+    $("#submit-batch-button").button().on( "click", function() {
+      console.log("batch button pressed");
+      status('');
+      const parsedBatchData = parseBatchData();
+
       const progressElement = window.document.getElementById("enhance-progress");
       progressElement.style.display = "block";
       const progressElementBar = window.document.getElementById("enhance-progress-bar");
       progressElementBar.style.width = `0%`;
+
+      let i = 0;
+      const total = parsedBatchData.length;
+
       const postBatch = function(data, textStatus, jqXHR) {
         status(`Ready: ${i}/${total}`);
         progressElementBar.style.width = `${i / total * 100}%`;
@@ -382,6 +500,8 @@ A címkék hatása mindig a következő ugyanolyan típusú (kategória vagy dá
       };
       postBatch();
     });
+
+
   })();
 /* jshint ignore:start */
 ]]></>).toString();
