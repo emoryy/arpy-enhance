@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ArpyEnhance
 // @namespace    hu.emoryy
-// @version      0.5
+// @version      0.6
 // @description  enhances Arpy
 // @author       Emoryy
 // @require      https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js
@@ -14,6 +14,8 @@
 
   const debug = false;
 
+  document.getElementById('person').disabled = false;
+
   let favorites = [];
   function addCss(cssString) {
     const head = document.getElementsByTagName('head')[0];
@@ -23,16 +25,16 @@
     head.appendChild(newCss);
   }
   addCss(`
+    #content {
+      margin-top: 5px;
+    }
     #batch-textarea {
       border: 1px solid #ccc;
       border-radius: 3px;
       width: 892px;
       font-family: "monospace";
       transition: height 0.5s;
-      height: 40px;
-    }
-    #batch-textarea.active {
-      height: 250px;
+      height: 500px;
     }
     #status {
       display: inline-block;
@@ -40,10 +42,10 @@
       text-align: right;
       font-size: 16px;
       overflow: hidden;
-    height: 32px;
-    line-height: 32px;
-    vertical-align: middle;
-    margin-right: 20px;
+      height: 32px;
+      line-height: 32px;
+      vertical-align: middle;
+      margin-right: 20px;
     }
     #status.error {
       color: darkred;
@@ -62,15 +64,86 @@
     }
     #favorites-container {
     }
+    #preview-container h3 {
+      margin-bottom: 0;
+    }
+    #preview-container h3:first-child {
+      margin-top: 0;
+    }
+    #preview-container td,
+    #preview-container th {
+      font-size: 15px;
+      font-family: monospace;
+      text-align: left;
+
+      padding: 4px;
+    }
+    #preview-container td:first-child {
+      padding-left: 20px;
+    }
+    #preview-container table {
+      margin-left: -10px;
+      margin-bottom: 10px;
+    }
+    .enhanced-container {
+      margin: 0px auto 20px auto;
+      padding: 20px 0px 2px 55px;
+      background-color: #efefef;
+      border: 1px solid #DDD;
+      border-radius: 5px;
+    }
+    #arpy-enhance-container {
+      width: 100%;
+      display: flex;
+    }
+    #content {
+      //width: 100%;
+      padding: 0;
+    }
+    #preview-container {
+
+    }
+    #time_entry_container,
+    #favorites-container,
+    #preview-container
+    {
+      flex: 0 1 auto;
+      padding: 10px;
+      margin: 10px;
+      border-radius: 5px;
+    }
+    #preview-container {
+      padding-left: 20px;
+    }
+    #time_entry_container {
+
+    }
+    #favorites-container {
+    }
+    #favorites-list li input {
+      width: 80px;
+    }
     #favorites-list {
+      margin: 0;
       list-style: none;
-      margin-left: -40px;
-      margin-right: 20px;
     }
     #favorites-list li {
       padding: 3px;
     }
-
+    #favorites-list li .label {
+      padding-top: 3px;
+      background: #00CC9F;
+      text-shadow: 1px 1px 1px rgba(0,0,0,0.8);
+    }
+    #favorites-list li .label + .label {
+      background: #00ACB3;
+    }
+    #favorites-list li .label + .label + .label{
+      background: #0088B2;
+    }
+    #favorites-list li .label + .label + .label + .label{
+      background: #046399;
+    }
     #favorites-list li input{
       padding: 0 5px !important;
       border: 1px solid transparent;
@@ -80,32 +153,11 @@
       border: 1px solid #777;
       background: white;
     }
-    #preview-container {
-    position: absolute;
-    top: 60px;
-    left: 50%;
-    margin-left: 520px;
-    white-space: nowrap;
-    }
-    #preview-container td,
-    #preview-container th {
-    font-size: 9px;
-    font-family: monospace;
-    text-align: left;
-    line-height: 10px;
-    }
-    #preview-container td:first-child {
-    padding-left: 5px;
-    }
-    #preview-container table {
-    margin-left: -10px;
-    margin-bottom: 10px;
-    }
-
   `);
 
   function status(description, level) {
-    $('#status').html(description);
+    const statusElement = document.getElementById('status');
+    status.innerHTML = description;
     $('#status').attr('class', level);
   }
 
@@ -150,8 +202,13 @@
   }
 
   function displayFavoriteElement(fav) {
+    const projectDropdown = document.getElementById('project_id');
+    console.log("fav", fav);
+    const projectOption = projectDropdown.querySelector(`option[value="${fav.project_id.value}"]`);
+    const categoryLabel = projectOption ? projectOption.parentElement.getAttribute('label') : '?';
     const newLi = $(`
       <li>
+        <span class="label label-info">${categoryLabel}</span>
         <span class="label label-info">${fav.project_id && fav.project_id.label}</span>
         <span class="label label-info">${fav.todo_list_id && fav.todo_list_id.label || '-'}</span>
         <span class="label label-info">${fav.todo_item_id && fav.todo_item_id.label || '-'}</span>
@@ -206,7 +263,7 @@ Munkaidő bejegyzést tartalmazó sor formátuma a következő:
 
 A sorokat az első két előforduló szóköz osztja 3 részre (a soreleji behúzás nem számít).
 1. Dátum/idő.
-YYYY-MM-DD vagy MM-DD, az év tehát opcionális. Ha nincs év megadva, akkor automatikusan az aktuális év lesz érvényes a sorra.
+YYYY-MM-DD vagy MM-DD, az év tehát opcionális. Ha nincs megadva, akkor automatikusan az aktuális év lesz érvényes a sorra.
 2. Munkaórák száma.
 Ez lehet egész szám vagy tizedes tört ponttal jelölve.
 3. Leírás szövege.
@@ -275,16 +332,15 @@ ciggar
     </div>
   `);
   $("#time_entry_submit").before(
-    `<button class="btn btn-primary btn-large" type="button" id="preview-button">Előnézet</button>
-    <button class="btn btn-primary btn-large" type="button" id="submit-batch-button">Mentés!</button>&nbsp;`
+    `<button class="btn btn-primary btn-large" type="button" id="submit-batch-button">Mentés!</button>&nbsp;`
   );
   $("#time_entry_description").after(
     `<textarea id="batch-textarea" placeholder="${placeholderText}" class="textarea ui-widget-content ui-corner-all"></textarea>`
   );
-  $("#time_entry_container").append(
-    `<div id="preview-container" class="well"></div>
-<div id="favorites-container"><ul id="favorites-list" class="well"></ul></div>`
-  );
+  //$("#time_entry_container").wrap(`<div id="arpy-enhance-container"></div>`);
+  $("#time_entry_container").after(`<div id="preview-container" class="well"></div>`);
+  $("#time_entry_container").before(`<div id="favorites-container" class="well"><ul id="favorites-list"></ul></div>`);
+
   $("#todo_item_id").after(
     '<button class="btn btn-primary btn-sm" type="button" id="add-fav-button"><span class="i">★</span> Fav</button>'
   );
@@ -298,10 +354,11 @@ ciggar
   });
   if (window.localStorage.batchTextareaSavedValue) {
     document.getElementById('batch-textarea').value = window.localStorage.batchTextareaSavedValue;
+    updatePreview();
   }
 
 
-  const parseBatchData = function() {
+  function parseBatchData() {
     const textareaValue = $('#batch-textarea').val();
     if(!textareaValue || !(textareaValue.trim())) {
       return { errors: ["no data"] };
@@ -448,71 +505,75 @@ ciggar
     return { data: parsedBatchData, summarizedData };
   }
 
-  document.getElementById('batch-textarea').addEventListener('input', function(ev) {
-    console.log("E", arguments);
-    window.localStorage.batchTextareaSavedValue = ev.target.value;
+  function updatePreview() {
     const result = parseBatchData();
-
     const previewContainer = document.getElementById("preview-container");
     previewContainer.innerHTML = "";
     if (result.errors) {
       const list = document.createElement("ul");
       previewContainer.appendChild(list);
 
-      errors.forEach((error) => {
+      result.errors.forEach((error) => {
         const errorItem = document.createElement("li");
         errorItem.innerHTML = error;
         list.appendChild(errorItem);
       });
     }
-    if (result.summarizedData) {
-      ["dates", "labels"].forEach((sumType) => {
-        const data = result.summarizedData[sumType];
-        const table = document.createElement("table");
+    if (!result.summarizedData) {
+      return;
+    }
+    ["dates", "labels"].forEach((sumType) => {
+      const data = result.summarizedData[sumType];
+      const title = document.createElement("h3");
+      title.innerText = {
+        dates: "Napi bontás",
+        labels: "Projekt/kategória szerint"
+      }[sumType];
+      previewContainer.appendChild(title);
+      const table = document.createElement("table");
+      previewContainer.appendChild(table);
+      Object.entries(data).forEach(([key, value]) => {
+        const sumRow = document.createElement("tr");
+        table.appendChild(sumRow);
+        const catTh = document.createElement("th");
+        catTh.innerHTML = key;
+        sumRow.appendChild(catTh);
+        const sumTh = document.createElement("th");
+        sumTh.innerHTML = value.sum;
+        sumRow.appendChild(sumTh);
 
-        previewContainer.appendChild(table);
-        Object.entries(data).forEach(([key, value]) => {
-          const sumRow = document.createElement("tr");
-          table.appendChild(sumRow);
-          const catTh = document.createElement("th");
-          catTh.innerHTML = key;
-          sumRow.appendChild(catTh);
-          const sumTh = document.createElement("th");
-          sumTh.innerHTML = value.sum;
-          sumRow.appendChild(sumTh);
-
-          value.entries.forEach((row, i) => {
-            //let header;
+        value.entries.forEach((row, i) => {
+          //let header;
+          /*if (i === 0) {
+            header = document.createElement("tr");
+            table.appendChild(header);
+          }*/
+          const tr = document.createElement("tr");
+          table.appendChild(tr);
+          Object.entries(row).forEach(([key, value]) => {
+            if (!["time_entry[date]", "time_entry[hours]", "time_entry[description]"].includes(key)) {
+              return;
+            }
             /*if (i === 0) {
-              header = document.createElement("tr");
-              table.appendChild(header);
+              const th = document.createElement("th");
+              th.innerHTML = key;
+              header.appendChild(th);
             }*/
-            const tr = document.createElement("tr");
-            table.appendChild(tr);
-            Object.entries(row).forEach(([key, value]) => {
-              if (!["time_entry[date]", "time_entry[hours]", "time_entry[description]"].includes(key)) {
-                return;
-              }
-              /*if (i === 0) {
-                const th = document.createElement("th");
-                th.innerHTML = key;
-                header.appendChild(th);
-              }*/
-              const cell = document.createElement("td");
-              cell.innerHTML = value;
-              tr.appendChild(cell);
-            });
+            const cell = document.createElement("td");
+            cell.innerHTML = value;
+            tr.appendChild(cell);
           });
         });
-
       });
 
-    }
-  });
+    });
 
-  $("#preview-button").button().on( "click", function() {
-    const parseResult = parseBatchData();
-    console.log("parsedBatchData", parseResult);
+
+  }
+
+  document.getElementById('batch-textarea').addEventListener('input', function(ev) {
+    window.localStorage.batchTextareaSavedValue = ev.target.value;
+    updatePreview();
   });
 
   $("#submit-batch-button").button().on( "click", function() {
