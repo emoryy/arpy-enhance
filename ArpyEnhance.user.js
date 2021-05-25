@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ArpyEnhance
 // @namespace    hu.emoryy
-// @version      0.6
+// @version      0.7
 // @description  enhances Arpy
 // @author       Emoryy
 // @require      https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js
@@ -153,7 +153,48 @@
       border: 1px solid #777;
       background: white;
     }
+    #favorites-list .btn {
+      color: #666;
+      padding: 1px 5px;
+      vertical-align: top;
+      margin-right: 5px;
+    }
   `);
+
+  function fallbackCopyTextToClipboard(text) {
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+
+    // Avoid scrolling to bottom
+    textArea.style.top = "0";
+    textArea.style.left = "0";
+    textArea.style.position = "fixed";
+
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+
+    try {
+      const successful = document.execCommand('copy');
+      const msg = successful ? 'successful' : 'unsuccessful';
+      console.log('Fallback: Copying text command was ' + msg);
+    } catch (err) {
+      console.error('Fallback: Oops, unable to copy', err);
+    }
+
+    document.body.removeChild(textArea);
+  }
+  function copyTextToClipboard(text) {
+    if (!navigator.clipboard) {
+      fallbackCopyTextToClipboard(text);
+      return;
+    }
+    navigator.clipboard.writeText(text).then(function() {
+      console.log('Async: Copying to clipboard was successful!');
+    }, function(err) {
+      console.error('Async: Could not copy text: ', err);
+    });
+  }
 
   function status(description, level) {
     const statusElement = document.getElementById('status');
@@ -203,15 +244,17 @@
 
   function displayFavoriteElement(fav) {
     const projectDropdown = document.getElementById('project_id');
-    console.log("fav", fav);
     const projectOption = projectDropdown.querySelector(`option[value="${fav.project_id.value}"]`);
     const categoryLabel = projectOption ? projectOption.parentElement.getAttribute('label') : '?';
+    const labelParts = [
+      categoryLabel,
+      fav.project_id && fav.project_id.label,
+      fav.todo_list_id && fav.todo_list_id.label || '-',
+      fav.todo_item_id && fav.todo_item_id.label || '-'
+    ];
     const newLi = $(`
       <li>
-        <span class="label label-info">${categoryLabel}</span>
-        <span class="label label-info">${fav.project_id && fav.project_id.label}</span>
-        <span class="label label-info">${fav.todo_list_id && fav.todo_list_id.label || '-'}</span>
-        <span class="label label-info">${fav.todo_item_id && fav.todo_item_id.label || '-'}</span>
+        ${labelParts.map((part) => `<span class="label label-info">${part}</span>`).join("\n")}
       </li>
     `);
     const labelInput = $('<input placeholder="- címke helye -">');
@@ -221,10 +264,17 @@
       updateFav(fav.id, this.value);
     });
     newLi.prepend(labelInput);
-    const removeButton = $('<button class="btn btn-mini" type="button">&times;</button>');
+
+    const copyButton = $('<button title="Másolás vágólapra" class="btn btn-mini" type="button">📋</button>');
+    copyButton.button().on("click", () => copyTextToClipboard(labelParts.join(" / ")));
+    const removeButton = $('<button title="Törlés" class="btn btn-mini delete" type="button">&#10006;</button>');
     removeButton.button().on("click", function() {
-      removeFav(fav.id);
+      if (window.confirm(`Biztosan törölni akarod ezt az elemet?\n${labelParts.join(" / ")}`)) {
+        removeFav(fav.id);
+      }
     });
+
+    newLi.append(copyButton);
     newLi.append(removeButton);
     $('#favorites-list').append(newLi);
   }
