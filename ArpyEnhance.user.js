@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ArpyEnhance
 // @namespace    hu.emoryy
-// @version      0.7
+// @version      0.8
 // @description  enhances Arpy
 // @author       Emoryy
 // @require      https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js
@@ -51,7 +51,7 @@
       color: darkred;
       text-transform: uppercase;
     }
-    #time_entry_hours, #time_entry_submit, #time_entry_date, #time_entry_description {
+    #time_entry_hours, #time_entry_submit, #time_entry_date, #time_entry_description, #time_entry_issue_number {
       display: none;
     }
     #add-fav-button {
@@ -66,6 +66,7 @@
     }
     #preview-container h3 {
       margin-bottom: 0;
+      font-variant: small-caps;
     }
     #preview-container h3:first-child {
       margin-top: 0;
@@ -75,11 +76,11 @@
       font-size: 15px;
       font-family: monospace;
       text-align: left;
-
       padding: 4px;
     }
     #preview-container td:first-child {
-      padding-left: 20px;
+      padding-left: 15px;
+      white-space: nowrap;
     }
     #preview-container table {
       margin-left: -10px;
@@ -97,7 +98,6 @@
       display: flex;
     }
     #content {
-      //width: 100%;
       padding: 0;
     }
     #preview-container {
@@ -116,7 +116,6 @@
       padding-left: 20px;
     }
     #time_entry_container {
-
     }
     #favorites-container {
     }
@@ -158,6 +157,22 @@
       padding: 1px 5px;
       vertical-align: top;
       margin-right: 5px;
+    }
+
+    #open-help-dialog {
+      margin-right: 10px;
+    }
+    #helpModal {
+      top: 10%;
+      margin-left: -500px;
+      margin-top: 0;
+      width: 1000px;
+    }
+    #helpModal .modal-body {
+      max-height: 80vh;
+    }
+    #helpModal .modal-body pre {
+      font-size: 14px;
     }
   `);
 
@@ -312,12 +327,16 @@ Munkaidő bejegyzést tartalmazó sor formátuma a következő:
 2016-12-26 3.0 Ez itt a leírás szövege
 
 A sorokat az első két előforduló szóköz osztja 3 részre (a soreleji behúzás nem számít).
+
 1. Dátum/idő.
 YYYY-MM-DD vagy MM-DD, az év tehát opcionális. Ha nincs megadva, akkor automatikusan az aktuális év lesz érvényes a sorra.
+
 2. Munkaórák száma.
 Ez lehet egész szám vagy tizedes tört ponttal jelölve.
+
 3. Leírás szövege.
 Ez a sor teljes hátralévő része, a közben előforduló szóközökkel együtt.
+A leírás első szava opcionálisan lehet Redmine/Youtrack issue azonosító. Ezt a feldolgozó automatikusan felismeri. Az előnézet szekcióban a sikeres felismerést az jelzi, hogy meg is jelenik egy link az issue-hoz. Az issue azonosítót a backend felé a külön erre szolgáló mezőben küldjük be, tehát ez explicit külön lesz letárolva, és az elmentett munkaidő bejegyzéseknél is látszódni fog. Abban az esetben ha a leírás rész csak egy szó, és ez pont issue azonosító is egyben, akkor ezt issue azonosítóként és leírásként is beküldjük.
 
 Dátumcímkék használata
 
@@ -399,6 +418,31 @@ ciggar
 
   renderFavs();
 
+  // add help text popup and button
+  $("#submit-batch-button").before(
+    '<button class="btn btn-sm" type="button" id="open-help-dialog" title="Formátum help"><span class="i">❓</span></button>'
+  );
+  $("#open-help-dialog").button().on( "click", () => {
+    $('#helpModal').modal();
+  });
+
+
+  $("body").append(
+    `<div class="modal" id="helpModal" tabindex="-1" role="dialog" aria-labelledby="helpModalLabel" aria-hidden="true" style="display: none;">
+  <div class="modal-header">
+    <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
+    <h3 id="myModalLabel">Formátum help</h3>
+  </div>
+  <div class="modal-body">
+    <pre>
+      ${placeholderText}
+    </pre>
+  </div>
+  </div>`
+  );
+
+
+
   $("#batch-textarea").on('focus', function(){
     $(this).addClass('active');
   });
@@ -408,7 +452,7 @@ ciggar
   }
 
 
-  function parseBatchData() {
+  function parseBatchData(options = { }) {
     const textareaValue = $('#batch-textarea').val();
     if(!textareaValue || !(textareaValue.trim())) {
       return { errors: ["no data"] };
@@ -432,10 +476,8 @@ ciggar
     const errors = [];
 
     const summarizedData = {
-      labels: {
-      },
-      dates: {
-      }
+      labels: {},
+      dates: {}
     }
     const parsedBatchData = textareaValue.match(/[^\r\n]+/g).map(function(line, lineNumber) {
       const trimmedLine = line.trim();
@@ -498,6 +540,13 @@ ciggar
       const formattedDate = parsedDate.format('YYYY-MM-DD');
 
       const hours = lineParts.shift();
+      let issueNumber;
+      if (/^([A-Z0-9]+-)?\d+$/.test(lineParts[0])) {
+        issueNumber = lineParts[0];
+        if (lineParts.length > 1) {
+          lineParts.shift();
+        }
+      }
       const description = lineParts.join(' ');
 
       const outputDataObject = Object.assign({},
@@ -511,6 +560,14 @@ ciggar
           'time_entry[description]': description
         }
       );
+
+      if (issueNumber) {
+        outputDataObject["time_entry[issue_number]"] = issueNumber;
+      }
+
+      if (!options.nometa) {
+        outputDataObject.label = label;
+      }
 
       const parsedHours = Number.parseFloat(hours);
 
@@ -547,11 +604,11 @@ ciggar
       return { errors };
     }
 
-    //console.log('parsedBatchData', parsedBatchData);
-    //parsedBatchData.forEach(function(bd) {
-    //  console.log(bd.project_id, bd.todo_list_id, bd.todo_item_id, bd["time_entry[date]"], bd["time_entry[hours]"], bd["time_entry[description]"]);
-    //});
-
+    if (debug) {
+      parsedBatchData.forEach(function(bd) {
+        console.log(bd.project_id, bd.todo_list_id, bd.todo_item_id, bd["time_entry[date]"], bd["time_entry[hours]"], bd["time_entry[description]"]);
+      });
+    }
     return { data: parsedBatchData, summarizedData };
   }
 
@@ -559,6 +616,10 @@ ciggar
     const result = parseBatchData();
     const previewContainer = document.getElementById("preview-container");
     previewContainer.innerHTML = "";
+    const mainTitle = document.createElement("h4");
+    mainTitle.innerHTML = "Előnézet";
+    mainTitle.style = "font-variant: small-caps;";
+    previewContainer.appendChild(mainTitle);
     if (result.errors) {
       const list = document.createElement("ul");
       previewContainer.appendChild(list);
@@ -593,24 +654,41 @@ ciggar
         sumRow.appendChild(sumTh);
 
         value.entries.forEach((row, i) => {
-          //let header;
-          /*if (i === 0) {
-            header = document.createElement("tr");
-            table.appendChild(header);
-          }*/
           const tr = document.createElement("tr");
           table.appendChild(tr);
           Object.entries(row).forEach(([key, value]) => {
-            if (!["time_entry[date]", "time_entry[hours]", "time_entry[description]"].includes(key)) {
+            if (![
+              "time_entry[date]",
+              "time_entry[hours]",
+              "time_entry[description]",
+              "time_entry[issue_number]",
+            ].includes(key)) {
               return;
             }
-            /*if (i === 0) {
-              const th = document.createElement("th");
-              th.innerHTML = key;
-              header.appendChild(th);
-            }*/
             const cell = document.createElement("td");
-            cell.innerHTML = value;
+            if (!(key === "time_entry[date]" && sumType === "dates")) {
+              if (key === "time_entry[issue_number]" && value) {
+                let url;
+                let prefix = '';
+                if (/^\d+$/.test(value)) {
+                  url = `https://redmine.dbx.hu/issues/${value}`;
+                  prefix = "#";
+                } else if (/^[A-Z0-9]+-\d+$/.test(value)) {
+                  url = `https://youtrack.dbx.hu/issue/${value}`;
+
+                }
+                cell.innerHTML = `
+                  <a href="${url}" target="_blank">
+                    ${prefix}${value}
+                  </a>
+                `;
+              } else {
+                cell.innerHTML = value;
+              }
+            } else {
+              cell.innerHTML = row.label;
+            }
+
             tr.appendChild(cell);
           });
         });
@@ -629,7 +707,7 @@ ciggar
   $("#submit-batch-button").button().on( "click", function() {
     console.log("batch button pressed");
     status('');
-    const parsedBatchData = parseBatchData().data;
+    const parsedBatchData = parseBatchData({ nometa: true }).data;
 
     const progressElement = window.document.getElementById("enhance-progress");
     progressElement.style.display = "block";
