@@ -5,7 +5,7 @@
 // @description  enhances Arpy
 // @author       Emoryy
 // @require      https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js
-// @include      http://arpy.dbx.hu/timelog*
+// @include      https://arpy.dbx.hu/timelog*
 // @downloadURL  https://github.com/emoryy/arpy-enhance/raw/master/ArpyEnhance.user.js
 // ==/UserScript==
 
@@ -468,6 +468,15 @@ ciggar
       }
     });
 
+	// TODO item
+	let todoItemElement = document.getElementById("todo_item_id");
+	let selectedTodoItemElementText = todoItemElement.options[todoItemElement.selectedIndex].text;
+	let ersteRedmineTicketIndex = selectedTodoItemElementText.indexOf("#");
+	let ersteRedmineTicket = null;
+	if ( ersteRedmineTicketIndex !== -1 ) {
+		ersteRedmineTicket = selectedTodoItemElementText.substring(ersteRedmineTicketIndex + 1, ersteRedmineTicketIndex + 6);
+	}
+
     let currentDate = moment();
     let currentProjectData = null;
     if (Object.keys(projectData).length === 3) {
@@ -541,10 +550,12 @@ ciggar
 
       const hours = lineParts.shift();
       let issueNumber;
-      if (/^([A-Z0-9]+-)?\d+$/.test(lineParts[0])) {
+      if ( !(ersteRedmineTicket === undefined || ersteRedmineTicket === null) ){
+			issueNumber = ersteRedmineTicket;
+	    }else if(/^([A-Z0-9]+-)?\d+$/.test(lineParts[0])) {
         issueNumber = lineParts[0];
         if (lineParts.length > 1) {
-          lineParts.shift();
+			lineParts.shift();
         }
       }
       const description = lineParts.join(' ');
