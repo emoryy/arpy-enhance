@@ -6,6 +6,7 @@
 // @author       Emoryy
 // @require      https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js
 // @include      http://arpy.dbx.hu/timelog*
+// @include      https://arpy.dbx.hu/timelog*
 // @downloadURL  https://github.com/emoryy/arpy-enhance/raw/master/ArpyEnhance.user.js
 // ==/UserScript==
 
@@ -71,12 +72,19 @@
     #preview-container h3:first-child {
       margin-top: 0;
     }
+    #preview-container th {
+      white-space: nowrap;
+    }
     #preview-container td,
     #preview-container th {
       font-size: 15px;
       font-family: monospace;
       text-align: left;
       padding: 4px;
+    }
+    #preview-container td:nth-child(3) {
+
+      white-space: nowrap;
     }
     #preview-container td:first-child {
       padding-left: 15px;
