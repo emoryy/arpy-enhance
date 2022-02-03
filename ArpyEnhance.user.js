@@ -1,17 +1,27 @@
 // ==UserScript==
 // @name         ArpyEnhance
 // @namespace    hu.emoryy
-// @version      0.9
+// @version      0.10
 // @description  enhances Arpy
 // @author       Emoryy
 // @require      https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js
 // @include      http://arpy.dbx.hu/timelog*
 // @include      https://arpy.dbx.hu/timelog*
 // @downloadURL  https://github.com/emoryy/arpy-enhance/raw/master/ArpyEnhance.user.js
+// @icon         https://icons.duckduckgo.com/ip2/dbx.hu.ico
 // ==/UserScript==
 
 (function() {
   'use strict';
+
+  let link = document.querySelector("link[rel~='icon']");
+  if (!link) {
+    link = document.createElement('link');
+    link.rel = 'icon';
+    link.setAttribute("type", "image/x-icon");
+    document.getElementsByTagName('head')[0].appendChild(link);
+  }
+  link.href = "https://i.imgur.com/XqJTK1c.png";
 
   const debug = false;
 
@@ -283,7 +293,6 @@
     const labelInput = $('<input placeholder="- címke helye -">');
     labelInput.val(fav.label);
     labelInput.change(function(...args) {
-      console.log(args);
       updateFav(fav.id, this.value);
     });
     newLi.prepend(labelInput);
@@ -412,7 +421,7 @@ ciggar
     `<button class="btn btn-primary btn-large" type="button" id="submit-batch-button">Mentés!</button>&nbsp;`
   );
   $("#time_entry_description").after(
-    `<textarea id="batch-textarea" placeholder="${placeholderText}" class="textarea ui-widget-content ui-corner-all"></textarea>`
+    `<textarea id="batch-textarea" placeholder="${placeholderText}" class="textarea ui-widget-content ui-corner-all" spellcheck="false"></textarea>`
   );
   //$("#time_entry_container").wrap(`<div id="arpy-enhance-container"></div>`);
   $("#time_entry_container").after(`<div id="preview-container" class="well"></div>`);
@@ -549,13 +558,18 @@ ciggar
 
       const hours = lineParts.shift();
       let issueNumber;
-      if (/^([A-Z0-9]+-)?\d+$/.test(lineParts[0])) {
-        issueNumber = lineParts[0];
-        if (lineParts.length > 1) {
-          lineParts.shift();
+      function getIssueNumber(i) {
+        if (!issueNumber && /#?([A-Z0-9]+-)?\d+$/.test(lineParts[i])) {
+          issueNumber = lineParts[i].match(/#?(.+)/)[1]; // esetleges # kiszedése
+          if (lineParts.length > 1 && i === 0) {
+            lineParts.shift();
+          }
         }
       }
-      const description = lineParts.join(' ');
+      getIssueNumber(0);
+      getIssueNumber(1);
+
+      const description = lineParts.join(' ').replace(/^- /,''); // ha az issue szám után kötőjel volt " - ", akkor ez kiszedi
 
       const outputDataObject = Object.assign({},
         genericFormData,
@@ -678,8 +692,9 @@ ciggar
               if (key === "time_entry[issue_number]" && value) {
                 let url;
                 let prefix = '';
-                if (/^\d+$/.test(value)) {
-                  url = `https://redmine.dbx.hu/issues/${value}`;
+                if (/^#?\d+$/.test(value)) {
+                  const issueNumber = value.match(/^#?(.+)/)[1];
+                  url = `https://redmine.dbx.hu/issues/${issueNumber}`;
                   prefix = "#";
                 } else if (/^[A-Z0-9]+-\d+$/.test(value)) {
                   url = `https://youtrack.dbx.hu/issue/${value}`;
