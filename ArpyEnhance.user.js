@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ArpyEnhance
 // @namespace    hu.emoryy
-// @version      0.10
+// @version      0.11
 // @description  enhances Arpy
 // @author       Emoryy
 // @require      https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js
@@ -26,6 +26,8 @@
   const debug = false;
 
   document.getElementById('person').disabled = false;
+
+  moment.locale("hu");
 
   let favorites = [];
   function addCss(cssString) {
@@ -631,6 +633,32 @@ ciggar
         console.log(bd.project_id, bd.todo_list_id, bd.todo_item_id, bd["time_entry[date]"], bd["time_entry[hours]"], bd["time_entry[description]"]);
       });
     }
+
+    // dátum alapján csoportosított adatok sorbarendezése
+    summarizedData.dates = Object.entries(summarizedData.dates).sort((a, b) => {
+      if (a[0] < b[0]) {
+        return -1;
+      }
+      if (a[0] > b[0]) {
+        return 1;
+      }
+      return 0;
+    }).reduce((acc, cur) => (acc[cur[0]] = cur[1], acc), {});
+
+    Object.entries(summarizedData.labels).forEach(([label, object]) => {
+      summarizedData.labels[label].entries = object.entries.sort((a, b) => {
+        const aDate = a["time_entry[date]"];
+        const bDate = b["time_entry[date]"];
+        if (aDate < bDate) {
+          return -1;
+        }
+        if (aDate > bDate) {
+          return 1;
+        }
+        return 0;
+      });
+    });
+
     return { data: parsedBatchData, summarizedData };
   }
 
@@ -665,7 +693,30 @@ ciggar
       previewContainer.appendChild(title);
       const table = document.createElement("table");
       previewContainer.appendChild(table);
-      Object.entries(data).forEach(([key, value]) => {
+
+      Object.entries(data).forEach(([key, value], i, dataEntries) => {
+        // hiányzó napok berakása
+        if (sumType === "dates" && dataEntries[i - 1]) {
+
+          const date = moment(key, "YYYY-MM-DD");
+          let prevDate = moment(dataEntries[i - 1][0], "YYYY-MM-DD").add(1, 'd');
+          while (date.format("YYYY-MM-DD") !== prevDate.format("YYYY-MM-DD")) {
+            const tr = document.createElement("tr");
+            const th = document.createElement("th");
+            tr.appendChild(th);
+            th.innerText = prevDate.format("YYYY-MM-DD");
+            const d = prevDate.get('d');
+            const th2 = document.createElement("th");
+            th2.innerText = prevDate.toDate().toLocaleDateString("hu", { weekday: 'long' });
+            if (d !== 0 && d !== 6) {
+              th2.style.color = "red";
+            }
+            tr.appendChild(th2);
+            table.appendChild(tr);
+            prevDate.add(1, 'd');
+          }
+        }
+
         const sumRow = document.createElement("tr");
         table.appendChild(sumRow);
         const catTh = document.createElement("th");
@@ -675,9 +726,10 @@ ciggar
         sumTh.innerHTML = value.sum;
         sumRow.appendChild(sumTh);
 
-        value.entries.forEach((row, i) => {
+        value.entries.forEach((row, i, entries) => {
           const tr = document.createElement("tr");
           table.appendChild(tr);
+
           Object.entries(row).forEach(([key, value]) => {
             if (![
               "time_entry[date]",
