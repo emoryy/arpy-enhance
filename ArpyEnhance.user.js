@@ -1,10 +1,11 @@
 // ==UserScript==
 // @name         ArpyEnhance
 // @namespace    hu.emoryy
-// @version      0.11
+// @version      0.12
 // @description  enhances Arpy
 // @author       Emoryy
 // @require      https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js
+// @require      https://cdnjs.cloudflare.com/ajax/libs/less.js/4.1.2/less.min.js
 // @include      http://arpy.dbx.hu/timelog*
 // @include      https://arpy.dbx.hu/timelog*
 // @downloadURL  https://github.com/emoryy/arpy-enhance/raw/master/ArpyEnhance.user.js
@@ -13,6 +14,8 @@
 
 (function() {
   'use strict';
+
+  const REDMINE_API_KEY = localStorage.REDMINE_API_KEY;
 
   let link = document.querySelector("link[rel~='icon']");
   if (!link) {
@@ -30,6 +33,10 @@
   moment.locale("hu");
 
   let favorites = [];
+
+  const redmineCache = {};
+  const arpyCache = {};
+
   function addCss(cssString) {
     const head = document.getElementsByTagName('head')[0];
     const newCss = document.createElement('style');
@@ -87,6 +94,27 @@
     #preview-container th {
       white-space: nowrap;
     }
+    #preview-container td, #preview-container th {
+    	 background-color: #ddd;
+    }
+     #preview-container td a, #preview-container th a {
+    	 font-weight: bold;
+    }
+     #preview-container .sum-row {
+    	 border-top: 10px solid #f5f5f5;
+    }
+     #preview-container .sum-row td, #preview-container .sum-row th {
+    	 background-color: #555;
+    	 color: white;
+    }
+     #preview-container tr.is-automatic-label td, #preview-container tr.is-automatic-label th {
+    	 background-color: #c4ecd7;
+    }
+    #preview-container tr td:first-child,
+    #preview-container th {
+      max-width: 100px;
+      overflow: hidden;
+    }
     #preview-container td,
     #preview-container th {
       font-size: 15px;
@@ -138,6 +166,8 @@
     #time_entry_container {
     }
     #favorites-container {
+      max-height: 50vh;
+      overflow-y: auto;
     }
     #favorites-list li input {
       width: 80px;
@@ -194,6 +224,30 @@
     #helpModal .modal-body pre {
       font-size: 14px;
     }
+
+    .preview-visualisation-block {
+      margin: 2px;
+      background-color: #aaa;
+      border-radius: 4px;
+      height: 20px;
+    }
+    .preview-visualisation {
+      display: flex;
+    }
+    .preview-visualisation-th {
+      position: relative;
+    }
+    .preview-visualisation-th:before {
+      content: " ";
+      position: absolute;
+      top: 6px;
+      left: 0px;
+      border-right: 4px solid black;
+      height: 20px;
+      display: block;
+      pointer-events: none;
+      width: 432px;
+    }
   `);
 
   function fallbackCopyTextToClipboard(text) {
@@ -233,7 +287,7 @@
 
   function status(description, level) {
     const statusElement = document.getElementById('status');
-    status.innerHTML = description;
+    statusElement.innerHTML = description;
     $('#status').attr('class', level);
   }
 
@@ -263,6 +317,27 @@
     displayFavoriteElement(fav);
   }
 
+  function getFullLabelPartsForFav(fav) {
+    const projectDropdown = document.getElementById('project_id');
+    const projectOption = projectDropdown.querySelector(`option[value="${fav.project_id.value}"]`);
+    const categoryLabel = projectOption ? projectOption.parentElement.getAttribute('label') : '?';
+    return [
+      categoryLabel,
+      fav.project_id?.label,
+      fav.todo_list_id?.label || '-',
+      fav.todo_item_id?.label || '-'
+    ];
+  }
+
+  function findTodoDataByFullLabelString(fullLabelString) {
+    // first try find it among favorites
+    const favorite = favorites.find((fav) => {
+      const fullLabelForFav = getFullLabelPartsForFav(fav).join(" / ");
+      return fullLabelString === fullLabelForFav
+    });
+    return favorite;
+  }
+
   function saveFavorites() {
     window.localStorage.favorites = JSON.stringify(favorites);
   }
@@ -278,15 +353,7 @@
   }
 
   function displayFavoriteElement(fav) {
-    const projectDropdown = document.getElementById('project_id');
-    const projectOption = projectDropdown.querySelector(`option[value="${fav.project_id.value}"]`);
-    const categoryLabel = projectOption ? projectOption.parentElement.getAttribute('label') : '?';
-    const labelParts = [
-      categoryLabel,
-      fav.project_id && fav.project_id.label,
-      fav.todo_list_id && fav.todo_list_id.label || '-',
-      fav.todo_item_id && fav.todo_item_id.label || '-'
-    ];
+    const labelParts = getFullLabelPartsForFav(fav);
     const newLi = $(`
       <li>
         ${labelParts.map((part) => `<span class="label label-info">${part}</span>`).join("\n")}
@@ -294,7 +361,7 @@
     `);
     const labelInput = $('<input placeholder="- címke helye -">');
     labelInput.val(fav.label);
-    labelInput.change(function(...args) {
+    labelInput.change(function() {
       updateFav(fav.id, this.value);
     });
     newLi.prepend(labelInput);
@@ -446,32 +513,32 @@ ciggar
   });
 
 
-  $("body").append(
-    `<div class="modal" id="helpModal" tabindex="-1" role="dialog" aria-labelledby="helpModalLabel" aria-hidden="true" style="display: none;">
-  <div class="modal-header">
-    <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
-    <h3 id="myModalLabel">Formátum help</h3>
-  </div>
-  <div class="modal-body">
-    <pre>
-      ${placeholderText}
-    </pre>
-  </div>
-  </div>`
-  );
+  $("body").append(`
+    <div class="modal" id="helpModal" tabindex="-1" role="dialog" aria-labelledby="helpModalLabel" aria-hidden="true" style="display: none;">
+    <div class="modal-header">
+      <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
+      <h3 id="myModalLabel">Formátum help</h3>
+    </div>
+    <div class="modal-body">
+      <pre>
+        ${placeholderText}
+      </pre>
+    </div>
+    </div>
+  `);
 
 
 
   $("#batch-textarea").on('focus', function(){
     $(this).addClass('active');
   });
+
   if (window.localStorage.batchTextareaSavedValue) {
     document.getElementById('batch-textarea').value = window.localStorage.batchTextareaSavedValue;
     updatePreview();
   }
 
-
-  function parseBatchData(options = { }) {
+  async function parseBatchData(options = { }) {
     const textareaValue = $('#batch-textarea').val();
     if(!textareaValue || !(textareaValue.trim())) {
       return { errors: ["no data"] };
@@ -498,7 +565,7 @@ ciggar
       labels: {},
       dates: {}
     }
-    const parsedBatchData = textareaValue.match(/[^\r\n]+/g).map(function(line, lineNumber) {
+    const parsedBatchData = (await Promise.all(textareaValue.match(/[^\r\n]+/g).map(async function(line, lineNumber) {
       const trimmedLine = line.trim();
       if (!trimmedLine || trimmedLine[0] === '#') {
         return;
@@ -524,12 +591,7 @@ ciggar
         return;
       }
 
-      const label = (currentProjectData && currentProjectData.label) || "";
-
-      if (!currentProjectData) {
-        errors.push(`${lineNumber + 1}. sor: Kategória információ hiányzik`);
-        return;
-      }
+      let currentLabel = (currentProjectData && currentProjectData.label) || "";
 
       function parseDateStr(dateStr) {
         const momentizedDate = moment(dateStr, ['YYYY-MM-DD', 'MM-DD'], true);
@@ -570,15 +632,97 @@ ciggar
       }
       getIssueNumber(0);
       getIssueNumber(1);
+      getIssueNumber(2);
+
+      let externallyFetchedProjectData;
+      if (issueNumber?.match(/^\d+$/)) {
+        let promise = redmineCache[issueNumber];
+        if (!promise) {
+          promise = fetch(`https://redmine.dbx.hu/issues/${issueNumber}.json`, {
+            headers: {
+              "Content-Type": "application/json",
+              "X-Redmine-API-Key": REDMINE_API_KEY
+            }
+          }).then((response) => response.json());
+          redmineCache[issueNumber] = promise;
+        }
+        const json = await promise;
+        const arpyField = json.issue.custom_fields.find(({ name }) => name === "Arpy jelentés");
+        if (arpyField?.value) {
+          // kategória / todo megkeresése
+          // először a fav-ok között keressük
+          const arpyFieldValue = arpyField.value;
+          const fav = findTodoDataByFullLabelString(arpyFieldValue);
+          if (fav) {
+            console.log("found", fav);
+            currentLabel = fav.label;
+            externallyFetchedProjectData = {
+              project_id: fav.project_id.value,
+              todo_list_id: fav.todo_list_id.value,
+              todo_item_id: fav.todo_item_id.value,
+              arpyField: arpyField.value
+            }
+          } else {
+            // aztán a lenyílók értékei között
+            const arpyParts = arpyFieldValue.split(" / ");
+            console.log("arpyParts", arpyParts);
+            const projectOption = Array.from(document.querySelectorAll(`#project_id optgroup[label="${arpyParts[0]}"] option`)).find(
+              (option) => option.innerText === arpyParts[1]
+            );
+            if (projectOption) {
+              const projectId = projectOption.value;
+              let todoListPromise = arpyCache[`projectId-${projectId}`];
+              if (!todoListPromise) {
+                todoListPromise = fetch(`/get_todo_lists?project_id=${projectId}&show_completed=false`).then((response) => response.json());
+                arpyCache[`projectId-${projectId}`] = todoListPromise;
+              }
+              const todoListResponse = await todoListPromise;
+
+              const todoList = todoListResponse.find(({ name }) => name === arpyParts[2]);
+              console.log("todoList", projectId, todoList);
+              if (todoList) {
+                let todoItemsPromise = arpyCache[`todoListId-${todoList.id}`];
+
+                if (!todoItemsPromise) {
+                  todoItemsPromise = fetch(`/get_todo_items?todo_list_id=${todoList.id}&show_completed=false`).then((response) => response.json());
+                  arpyCache[`todoListId-${todoList.id}`] = todoItemsPromise;
+                }
+                const todoItems = await todoItemsPromise;
+                console.log("todoItems", projectId, todoList.id, todoItems);
+                const todoItem = todoItems.find(({ content }) => content === arpyParts[3]);
+                if (todoItem) {
+                  currentLabel = arpyField.value;
+                  externallyFetchedProjectData = {
+                    label: arpyField.value,
+                    project_id: projectId,
+                    todo_list_id: todoList.id,
+                    todo_item_id: todoItem.id,
+                    arpyField: arpyField.value
+                  }
+                }
+              }
+
+            }
+          }
+          // if (!externallyFetchedProjectData && arpyField?.value) {
+          //   currentLabel = "*" + arpyField?.value;
+          // }
+        }
+      }
+
+      if (!currentProjectData && !externallyFetchedProjectData) {
+        errors.push(`${lineNumber + 1}. sor: Kategória információ hiányzik`);
+        return;
+      }
 
       const description = lineParts.join(' ').replace(/^- /,''); // ha az issue szám után kötőjel volt " - ", akkor ez kiszedi
 
       const outputDataObject = Object.assign({},
         genericFormData,
         {
-          project_id: currentProjectData.project_id,
-          todo_list_id: currentProjectData.todo_list_id,
-          todo_item_id: currentProjectData.todo_item_id,
+          project_id: externallyFetchedProjectData?.project_id || currentProjectData?.project_id,
+          todo_list_id: externallyFetchedProjectData?.todo_list_id || currentProjectData?.todo_list_id,
+          todo_item_id: externallyFetchedProjectData?.todo_item_id || currentProjectData?.todo_item_id,
           'time_entry[date]': formattedDate,
           'time_entry[hours]': hours,
           'time_entry[description]': description
@@ -589,8 +733,11 @@ ciggar
         outputDataObject["time_entry[issue_number]"] = issueNumber;
       }
 
+
       if (!options.nometa) {
-        outputDataObject.label = label;
+        outputDataObject.label = currentLabel;
+        outputDataObject.isAutomaticLabel = !!externallyFetchedProjectData;
+        outputDataObject.arpyField = externallyFetchedProjectData?.arpyField;
       }
 
       const parsedHours = Number.parseFloat(hours);
@@ -610,29 +757,31 @@ ciggar
 
       // append summarized data by label
 
-      let byLabel = summarizedData.labels[label];
+      let byLabel = summarizedData.labels[currentLabel];
       if (!byLabel) {
         byLabel = {
           sum: 0,
           entries: []
         };
-        summarizedData.labels[label] = byLabel;
+        summarizedData.labels[currentLabel] = byLabel;
       }
       byLabel.sum += parsedHours;
       byLabel.entries.push(outputDataObject);
 
       return outputDataObject;
-    }).filter((item) => !!item);
+    }))).filter((item) => !!item);
+
+    console.log("READY");
 
     if (errors.length) {
       return { errors };
     }
 
-    if (debug) {
-      parsedBatchData.forEach(function(bd) {
-        console.log(bd.project_id, bd.todo_list_id, bd.todo_item_id, bd["time_entry[date]"], bd["time_entry[hours]"], bd["time_entry[description]"]);
-      });
-    }
+    // if (debug) {
+    //   parsedBatchData.forEach(function(bd) {
+    //     console.log(bd.project_id, bd.todo_list_id, bd.todo_item_id, bd["time_entry[date]"], bd["time_entry[hours]"], bd["time_entry[description]"]);
+    //   });
+    // }
 
     // dátum alapján csoportosított adatok sorbarendezése
     summarizedData.dates = Object.entries(summarizedData.dates).sort((a, b) => {
@@ -662,8 +811,8 @@ ciggar
     return { data: parsedBatchData, summarizedData };
   }
 
-  function updatePreview() {
-    const result = parseBatchData();
+  async function updatePreview() {
+    const result = await parseBatchData();
     const previewContainer = document.getElementById("preview-container");
     previewContainer.innerHTML = "";
     const mainTitle = document.createElement("h4");
@@ -702,14 +851,18 @@ ciggar
           let prevDate = moment(dataEntries[i - 1][0], "YYYY-MM-DD").add(1, 'd');
           while (date.format("YYYY-MM-DD") !== prevDate.format("YYYY-MM-DD")) {
             const tr = document.createElement("tr");
+            tr.classList.add("sum-row");
             const th = document.createElement("th");
             tr.appendChild(th);
             th.innerText = prevDate.format("YYYY-MM-DD");
             const d = prevDate.get('d');
             const th2 = document.createElement("th");
+            th2.setAttribute("colspan", 2);
+            th2.setAttribute("title", "Hiányzó bejegyzések");
             th2.innerText = prevDate.toDate().toLocaleDateString("hu", { weekday: 'long' });
             if (d !== 0 && d !== 6) {
               th2.style.color = "red";
+              th.style.color = "red";
             }
             tr.appendChild(th2);
             table.appendChild(tr);
@@ -718,18 +871,47 @@ ciggar
         }
 
         const sumRow = document.createElement("tr");
+        sumRow.classList.add("sum-row");
         table.appendChild(sumRow);
         const catTh = document.createElement("th");
         catTh.innerHTML = key;
+        if (value.entries[0].isAutomaticLabel) {
+          catTh.classList.add("is-automatic-label");
+        }
+        catTh.setAttribute("title", value.entries[0].label)
         sumRow.appendChild(catTh);
         const sumTh = document.createElement("th");
         sumTh.innerHTML = value.sum;
         sumRow.appendChild(sumTh);
+        if (sumType === "dates") {
+          const visualisationTh = document.createElement("th");
+          visualisationTh.setAttribute("colspan", 2);
+          visualisationTh.classList.add("preview-visualisation-th");
+          visualisationTh.innerHTML = `
+          <div class="preview-visualisation">
+            ${value.entries.map((row) => `
+              <div
+                class="preview-visualisation-block"
+                title="${row["time_entry[hours]"]} ${row["time_entry[description]"]}"
+                style="display: inline-block; width: ${54 * parseFloat(row["time_entry[hours]"]) - 4}px"
+              >
+              </div>
+            `).join('')}
+          </div>
+        `;
+          sumRow.appendChild(visualisationTh);
+        }
 
-        value.entries.forEach((row, i, entries) => {
+        value.entries.forEach((row, j, rows) => {
           const tr = document.createElement("tr");
+          if (j === rows.length - 1) {
+            tr.classList.add("section-last-row");
+          }
           table.appendChild(tr);
-
+          if (row.isAutomaticLabel) {
+            tr.classList.add("is-automatic-label");
+          }
+          tr.setAttribute("title", row.label);
           Object.entries(row).forEach(([key, value]) => {
             if (![
               "time_entry[date]",
@@ -779,10 +961,10 @@ ciggar
     updatePreview();
   });
 
-  $("#submit-batch-button").button().on( "click", function() {
+  $("#submit-batch-button").button().on( "click", async function() {
     console.log("batch button pressed");
     status('');
-    const parsedBatchData = parseBatchData({ nometa: true }).data;
+    const parsedBatchData = (await parseBatchData({ nometa: !debug })).data;
 
     const progressElement = window.document.getElementById("enhance-progress");
     progressElement.style.display = "block";
@@ -792,7 +974,7 @@ ciggar
     let i = 0;
     const total = parsedBatchData.length;
 
-    const postBatch = function(data, textStatus, jqXHR) {
+    const postBatch = function() {
       status(`Ready: ${i}/${total}`);
       progressElementBar.style.width = `${i / total * 100}%`;
       i++;
@@ -813,5 +995,5 @@ ciggar
   });
 
 
-})();
+}());
 
