@@ -291,6 +291,17 @@
     $('#status').attr('class', level);
   }
 
+  const asyncStatus = {
+    start: {},
+    end: {},
+  };
+
+  function updateAsyncProgress(type, status) {
+    asyncStatus[status][type] = (asyncStatus[status][type] || 0) + 1;
+    const previewContainer = document.getElementById("preview-container");
+    previewContainer.innerHTML = Object.entries(asyncStatus.start).map(([type, count]) => `<div>${type}: ${asyncStatus.end[type] || 0}/${count}</div>`).join("\n");
+  }
+
   function addNewFavorite() {
     const formData = $('form[action="/timelog"]').serializeArray();
     const fav = {
@@ -487,7 +498,7 @@ ciggar
     </div>
   `);
   $("#time_entry_submit").before(
-    `<button class="btn btn-primary btn-large" type="button" id="submit-batch-button">Mentés!</button>&nbsp;`
+    `<button class="btn ${debug ? "btn-danger" : "btn-primary"} btn-large" type="button" id="submit-batch-button">Mentés!</button>&nbsp;`
   );
   $("#time_entry_description").after(
     `<textarea id="batch-textarea" placeholder="${placeholderText}" class="textarea ui-widget-content ui-corner-all" spellcheck="false"></textarea>`
@@ -585,13 +596,14 @@ ciggar
               todo_list_id: fav.todo_list_id.value,
               todo_item_id: fav.todo_item_id.value
             };
-
           }
         }
         return;
       }
-
-      let currentLabel = (currentProjectData && currentProjectData.label) || "";
+      let localCurrentDate = currentDate;
+      let localCurrentProjectData = currentProjectData;
+      let currentLabel = (localCurrentProjectData && localCurrentProjectData.label) || "";
+      console.log("initial current label", currentLabel);
 
       function parseDateStr(dateStr) {
         const momentizedDate = moment(dateStr, ['YYYY-MM-DD', 'MM-DD'], true);
@@ -607,11 +619,11 @@ ciggar
       const dateStr = lineParts.shift();
       let parsedDate;
       if (dateStr === '-') {
-        if (!currentDate) {
+        if (!localCurrentDate) {
           errors.push(`${lineNumber + 1}. sor: dátum címke hiányzik!`);
           return;
         }
-        parsedDate = currentDate;
+        parsedDate = localCurrentDate;
       } else {
         parsedDate = parseDateStr(dateStr);
         if (!parsedDate) {
@@ -637,6 +649,7 @@ ciggar
       let externallyFetchedProjectData;
       if (issueNumber?.match(/^\d+$/)) {
         let promise = redmineCache[issueNumber];
+        updateAsyncProgress("issue", "start");
         if (!promise) {
           promise = fetch(`https://redmine.dbx.hu/issues/${issueNumber}.json`, {
             headers: {
@@ -646,6 +659,7 @@ ciggar
           }).then((response) => response.json());
           redmineCache[issueNumber] = promise;
         }
+        updateAsyncProgress("issue", "end");
         const json = await promise;
         const arpyField = json.issue.custom_fields.find(({ name }) => name === "Arpy jelentés");
         if (arpyField?.value) {
@@ -671,23 +685,27 @@ ciggar
             );
             if (projectOption) {
               const projectId = projectOption.value;
+              updateAsyncProgress("todoList", "start");
               let todoListPromise = arpyCache[`projectId-${projectId}`];
               if (!todoListPromise) {
                 todoListPromise = fetch(`/get_todo_lists?project_id=${projectId}&show_completed=false`).then((response) => response.json());
                 arpyCache[`projectId-${projectId}`] = todoListPromise;
               }
               const todoListResponse = await todoListPromise;
+              updateAsyncProgress("todoList", "end");
 
               const todoList = todoListResponse.find(({ name }) => name === arpyParts[2]);
               console.log("todoList", projectId, todoList);
               if (todoList) {
                 let todoItemsPromise = arpyCache[`todoListId-${todoList.id}`];
 
+                updateAsyncProgress("todoItems", "start");
                 if (!todoItemsPromise) {
                   todoItemsPromise = fetch(`/get_todo_items?todo_list_id=${todoList.id}&show_completed=false`).then((response) => response.json());
                   arpyCache[`todoListId-${todoList.id}`] = todoItemsPromise;
                 }
                 const todoItems = await todoItemsPromise;
+                updateAsyncProgress("todoItems", "end");
                 console.log("todoItems", projectId, todoList.id, todoItems);
                 const todoItem = todoItems.find(({ content }) => content === arpyParts[3]);
                 if (todoItem) {
@@ -701,28 +719,23 @@ ciggar
                   }
                 }
               }
-
             }
           }
-          // if (!externallyFetchedProjectData && arpyField?.value) {
-          //   currentLabel = "*" + arpyField?.value;
-          // }
         }
       }
 
-      if (!currentProjectData && !externallyFetchedProjectData) {
+      if (!localCurrentProjectData && !externallyFetchedProjectData) {
         errors.push(`${lineNumber + 1}. sor: Kategória információ hiányzik`);
         return;
       }
 
       const description = lineParts.join(' ').replace(/^- /,''); // ha az issue szám után kötőjel volt " - ", akkor ez kiszedi
-
       const outputDataObject = Object.assign({},
         genericFormData,
         {
-          project_id: externallyFetchedProjectData?.project_id || currentProjectData?.project_id,
-          todo_list_id: externallyFetchedProjectData?.todo_list_id || currentProjectData?.todo_list_id,
-          todo_item_id: externallyFetchedProjectData?.todo_item_id || currentProjectData?.todo_item_id,
+          project_id: externallyFetchedProjectData?.project_id || localCurrentProjectData?.project_id,
+          todo_list_id: externallyFetchedProjectData?.todo_list_id || localCurrentProjectData?.todo_list_id,
+          todo_item_id: externallyFetchedProjectData?.todo_item_id || localCurrentProjectData?.todo_item_id,
           'time_entry[date]': formattedDate,
           'time_entry[hours]': hours,
           'time_entry[description]': description
