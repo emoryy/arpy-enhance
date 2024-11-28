@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ArpyEnhance
 // @namespace    hu.emoryy
-// @version      0.12
+// @version      0.13
 // @description  enhances Arpy
 // @author       Emoryy
 // @require      https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js
@@ -33,6 +33,7 @@
   moment.locale("hu");
 
   let favorites = [];
+  let favoriteSortOrder = localStorage.getItem('arpyEnhanceFavoriteSortOrder') || 'default';
 
   const redmineCache = {};
   const arpyCache = {};
@@ -47,6 +48,84 @@
   addCss(`
     #content {
       margin-top: 5px;
+      width: 100%;
+      padding: 0;
+    }
+    #timelog-page {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      #favorites-container {
+        flex: 1 1 100%;
+        width: auto !important;
+      }
+      #time_entry_container {
+        flex: 1 1 45%;
+        .description {
+          display: flex;
+        }
+        #batch-textarea {
+          flex: 1 1 auto;
+        }
+      }
+      #preview-container {
+        flex: 1 1 45%;
+        position: relative;
+        h3 {
+          padding: 0 10px;
+          position: sticky;
+          top: 0;
+          background: rgb(213,210,210);
+          z-index: 1;
+          margin-bottom: 0;
+          font-variant: small-caps;
+          &:first-child {
+            margin-top: 0;
+          }
+        }
+        th {
+          white-space: nowrap;
+        }
+        td, th {
+          background-color: #ddd;
+          a {
+            font-weight: bold;
+          }
+        }
+        .sum-row {
+          border-top: 10px solid #f5f5f5;
+          td, th {
+            background-color: #555;
+            color: white;
+          }
+        }
+        tr.is-automatic-label td, tr.is-automatic-label th {
+           background-color: #c4ecd7;
+        }
+        tr td:first-child,
+        th {
+          max-width: 100px;
+          overflow: hidden;
+        }
+        td,
+        th {
+          font-size: 15px;
+          font-family: monospace;
+          text-align: left;
+          padding: 4px;
+        }
+        td:nth-child(3) {
+          white-space: nowrap;
+        }
+        td:first-child {
+          padding-left: 15px;
+          white-space: nowrap;
+        }
+        table {
+          margin-left: -10px;
+          margin-bottom: 10px;
+        }
+      }
     }
     #batch-textarea {
       border: 1px solid #ccc;
@@ -54,7 +133,6 @@
       width: 892px;
       font-family: "monospace";
       transition: height 0.5s;
-      height: 500px;
     }
     #status {
       display: inline-block;
@@ -82,58 +160,7 @@
     .i {
       font-size: 16px;
     }
-    #favorites-container {
-    }
-    #preview-container h3 {
-      margin-bottom: 0;
-      font-variant: small-caps;
-    }
-    #preview-container h3:first-child {
-      margin-top: 0;
-    }
-    #preview-container th {
-      white-space: nowrap;
-    }
-    #preview-container td, #preview-container th {
-    	 background-color: #ddd;
-    }
-     #preview-container td a, #preview-container th a {
-    	 font-weight: bold;
-    }
-     #preview-container .sum-row {
-    	 border-top: 10px solid #f5f5f5;
-    }
-     #preview-container .sum-row td, #preview-container .sum-row th {
-    	 background-color: #555;
-    	 color: white;
-    }
-     #preview-container tr.is-automatic-label td, #preview-container tr.is-automatic-label th {
-    	 background-color: #c4ecd7;
-    }
-    #preview-container tr td:first-child,
-    #preview-container th {
-      max-width: 100px;
-      overflow: hidden;
-    }
-    #preview-container td,
-    #preview-container th {
-      font-size: 15px;
-      font-family: monospace;
-      text-align: left;
-      padding: 4px;
-    }
-    #preview-container td:nth-child(3) {
 
-      white-space: nowrap;
-    }
-    #preview-container td:first-child {
-      padding-left: 15px;
-      white-space: nowrap;
-    }
-    #preview-container table {
-      margin-left: -10px;
-      margin-bottom: 10px;
-    }
     .enhanced-container {
       margin: 0px auto 20px auto;
       padding: 20px 0px 2px 55px;
@@ -144,12 +171,6 @@
     #arpy-enhance-container {
       width: 100%;
       display: flex;
-    }
-    #content {
-      padding: 0;
-    }
-    #preview-container {
-
     }
     #time_entry_container,
     #favorites-container,
@@ -163,26 +184,37 @@
     #preview-container {
       padding-left: 20px;
     }
-    #time_entry_container {
+    #preview-container, #time_entry_container {
+      height: calc(80vh - 130px);
+      overflow: auto;
+    }
+    #time_entry_container .lastrow {
+      width: initial !important;
     }
     #favorites-container {
-      max-height: 50vh;
-      overflow-y: auto;
+      max-height: 20vh;
+      display: flex;
+      flex-direction: column;
+      position: relative;
     }
     #favorites-list li input {
       width: 80px;
     }
     #favorites-list {
       margin: 0;
+      margin-bottom: -10px;
       list-style: none;
-    }
-    #favorites-list li {
-      padding: 3px;
-    }
-    #favorites-list li .label {
-      padding-top: 3px;
-      background: #00CC9F;
-      text-shadow: 1px 1px 1px rgba(0,0,0,0.8);
+      flex-grow: 1;
+      overflow-y: auto;
+      min-height: 0;
+      li {
+        padding: 3px;
+        .label {
+          padding-top: 3px;
+          background: #00CC9F;
+          text-shadow: 1px 1px 1px rgba(0,0,0,0.8);
+        }
+      }
     }
     #favorites-list li .label + .label {
       background: #00ACB3;
@@ -230,6 +262,16 @@
       background-color: #aaa;
       border-radius: 4px;
       height: 20px;
+      display: flex;
+      align-content: center;
+      align-items: center;
+
+      span {
+        padding-left: 4px;
+        font-size: 10px;
+        color: black;
+        font-weight: normal;
+      }
     }
     .preview-visualisation {
       display: flex;
@@ -248,6 +290,108 @@
       pointer-events: none;
       width: 432px;
     }
+    #time_entry_container {
+      display: flex;
+      flex-direction: column;
+      form {
+        margin-bottom: 0;
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 auto;
+        .description {
+          flex: 1 1 100%;
+        }
+        & > br {
+          display: none;
+        }
+      }
+    }
+
+    .quick-filter-container {
+      position: absolute;
+      right: 35px;
+      top: 10px;
+      width: auto;
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 10px;
+      padding: 5px 7px;
+      background: #ddd;
+      border-radius: 7px;
+      z-index: 2;
+      input {
+        padding-left: 5px;
+        border-radius: 5px;
+        border: 1px solid #aaa;
+      }
+    }
+    #fav-sort-controls .btn.active {
+      background-color: #0088CC;
+      color: white;
+      text-shadow: none;
+      &:after {
+        content: " ▼";
+      }
+    }
+    ul.preview-tabs {
+      margin-left: -20px;
+      margin-right: -10px;
+      li:first-child {
+        margin-left: 20px;
+      }
+      li {
+        cursor: pointer;
+      }
+    }
+    .statistics {
+      display: flex;
+      justify-content: space-around;
+      font-family: monospace;
+      font-weight: bold;
+    }
+    .okay {
+      th {
+        background: rgb(32,131,79) !important;
+        color: rgb(224,255,239) !important;
+        &:first-child:before {
+          content: "";
+        }
+      }
+      .preview-visualisation-block {
+        background: rgb(135,195,165) !important;
+      }
+      td {
+        background: rgb(171,221,196) !important;
+      }
+    }
+    #minimal-vertical-resizer {
+      position: absolute;
+      bottom: -14px;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background-color: transparent;
+      border-top: 1px solid transparent;
+      border-bottom: 1px solid transparent;
+      cursor: ns-resize;
+      z-index: 99;
+      transition: background-color 0.2s ease;
+      display: flex;
+      justify-content: center;
+      justify-items: center;
+      align-items: center;
+      &:before {
+        content: "";
+        width: 20%;
+        height: 0;
+        border-top: 4px solid #aaa;
+      }
+      &:hover:before {
+        border-top: 4px solid #444;
+      }
+    }
+
   `);
 
   function fallbackCopyTextToClipboard(text) {
@@ -340,10 +484,17 @@
     ];
   }
 
-  function findTodoDataByFullLabelString(fullLabelString) {
+  function findTodoDataByFullLabelString(_fullLabelString) {
     // first try find it among favorites
+    function removeDays(str) {
+      return str.replace(/\W?\(\d+(,\d+)? nap\)\W?/,"").replace(/\W?\(\d+(\.\d+)?d\)\W?/,"").replace(/  +/g, ' ');
+    }
+    const fullLabelString = removeDays(_fullLabelString);
     const favorite = favorites.find((fav) => {
-      const fullLabelForFav = getFullLabelPartsForFav(fav).join(" / ");
+      const fullLabelForFav = removeDays(getFullLabelPartsForFav(fav).join(" / ")).trim();
+      // console.log("fullLabel of fav", fav.label, fullLabelForFav);
+      // console.log("fullLabel of input", fullLabelString);
+      // console.log("Egyezés?", fullLabelString === fullLabelForFav)
       return fullLabelString === fullLabelForFav
     });
     return favorite;
@@ -391,9 +542,44 @@
     $('#favorites-list').append(newLi);
   }
 
+  function setupFavoriteSorting() {
+    const sortControls = document.getElementById('fav-sort-controls');
+    sortControls.addEventListener('click', (e) => {
+      const button = e.target.closest('button');
+      if (!button) {
+        return;
+      }
+
+      const newSortOrder = button.dataset.sort;
+      if (newSortOrder !== favoriteSortOrder) {
+        favoriteSortOrder = newSortOrder;
+        localStorage.setItem('arpyEnhanceFavoriteSortOrder', newSortOrder);
+        renderFavs();
+      }
+    });
+  }
+
   function renderFavs() {
     $('#favorites-list').empty();
-    favorites.forEach(displayFavoriteElement);
+
+    const favoritesToRender = [...favorites]; // Create a copy to avoid modifying the original add-order
+
+    if (favoriteSortOrder === 'label') {
+      favoritesToRender.sort((a, b) => (a.label || '').localeCompare(b.label || '', 'hu'));
+    } else if (favoriteSortOrder === 'category') {
+      favoritesToRender.sort((a, b) => {
+        const fullLabelA = getFullLabelPartsForFav(a).join(' / ');
+        const fullLabelB = getFullLabelPartsForFav(b).join(' / ');
+        return fullLabelA.localeCompare(fullLabelB, 'hu');
+      });
+    }
+    // 'default' order requires no sorting, as we're using the original array's order.
+
+    favoritesToRender.forEach(displayFavoriteElement);
+
+    // Update the active state on the sort buttons
+    $('#fav-sort-controls .btn').removeClass('active');
+    $(`#fav-sort-controls .btn[data-sort="${favoriteSortOrder}"]`).addClass('active');
   }
 
   function removeFav(id) {
@@ -401,6 +587,79 @@
     favorites = remove(favorites, fav);
     saveFavorites();
     renderFavs();
+  }
+
+  function setupMinimalResizing() {
+    const topPanel = document.getElementById('favorites-container');
+    const bottomPanel1 = document.getElementById('time_entry_container');
+    const bottomPanel2 = document.getElementById('preview-container');
+
+    if (!topPanel || !bottomPanel1 || !bottomPanel2) {
+      return;
+    }
+
+    const resizer = document.createElement('div');
+    resizer.id = 'minimal-vertical-resizer';
+    topPanel.appendChild(resizer);
+
+    const STORAGE_KEY = 'arpyEnhanceTopPanelVh';
+    const ORIGINAL_BOTTOM_OFFSET_PX = 130; // The original offset from CSS
+    const DEFAULT_TOP_VH = 20;
+
+    const applyVhHeights = (topVh) => {
+      if (typeof topVh !== 'number' || isNaN(topVh)) {
+        return;
+      }
+
+      const constrainedTopVh = Math.max(2, Math.min(topVh, 90));
+      const bottomVh = 100 - constrainedTopVh;
+
+      topPanel.style.maxHeight = `${constrainedTopVh}vh`;
+      const bottomHeightCss = `calc(${bottomVh}vh - ${ORIGINAL_BOTTOM_OFFSET_PX}px)`;
+      bottomPanel1.style.height = bottomHeightCss;
+      bottomPanel2.style.height = bottomHeightCss;
+    };
+
+    const savedVh = localStorage.getItem(STORAGE_KEY);
+    applyVhHeights(savedVh ? parseFloat(savedVh) : DEFAULT_TOP_VH);
+
+    resizer.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+
+      // Get the computed style to read the panel's padding and border.
+      const computedStyle = window.getComputedStyle(topPanel);
+      const verticalPadding = parseFloat(computedStyle.paddingTop) + parseFloat(computedStyle.paddingBottom);
+      const verticalBorder = parseFloat(computedStyle.borderTopWidth) + parseFloat(computedStyle.borderBottomWidth);
+      const nonContentHeight = verticalPadding + verticalBorder;
+
+      const startY_px = e.clientY;
+      // Get the panel's full outer height, then subtract the padding and border to get the true content height.
+      const startTopContentHeight_px = topPanel.offsetHeight - nonContentHeight;
+      const viewportHeight_px = window.innerHeight;
+
+      const handleMouseMove = (moveEvent) => {
+        const deltaY_px = moveEvent.clientY - startY_px;
+        // The new height is the starting content height plus the mouse delta.
+        const newTopContentHeight_px = startTopContentHeight_px + deltaY_px;
+        // Convert the content height to vh.
+        const newTop_vh = (newTopContentHeight_px / viewportHeight_px) * 100;
+
+        applyVhHeights(newTop_vh);
+      };
+
+      const handleMouseUp = () => {
+        // On release, do the same conversion before saving.
+        const finalContentHeight_px = topPanel.offsetHeight - nonContentHeight;
+        const final_vh = (finalContentHeight_px / window.innerHeight) * 100;
+        localStorage.setItem(STORAGE_KEY, final_vh.toFixed(2));
+
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    });
   }
 
   try { favorites = JSON.parse(window.localStorage.favorites); } catch(e) { }
@@ -458,7 +717,10 @@ A hozzáadás után a kedvenceket címkével kell ellátni, mert ezekkel tudunk 
 
 A fenti legelső példában a taszk 1 a lenyílókban aktuálisan kiválasztott kategóriákat fogja megkapni, a taszk 2 és taszk 3 a demo címkével ellátott kedvenc kategóriáit, a taszk 4 pedig az insnet kategóriáit.
 
-A címkék hatása mindig a következő ugyanolyan típusú (kategória vagy dátum) címkéig érvényes. Nincs megkötés, hogy először dátum aztán kategória címkét kell használni, vagy fordítva. Tehát mondhatjuk akár azt is, hogy először napokra csoportosítva és azon belül pedig kategóriánként bontva visszük fel az adatokat, de akár azt is, hogy először projektek szerint csoportosítunk, és ezen belül adjuk meg a napokat:
+A címkék hatása alapértelmezetten a következő ugyanolyan típusú (kategória vagy dátum) címkéig érvényes.
+Ha egy kategória címke neve elejére vagy a végére / vagy \ karaktert rakunk, akkor csak a közvetlenül utána következő sorra lesz érvényes.
+
+Nincs megkötés, hogy először dátum aztán kategória címkét kell használni, vagy fordítva. Tehát mondhatjuk akár azt is, hogy először napokra csoportosítva és azon belül pedig kategóriánként bontva visszük fel az adatokat, de akár azt is, hogy először projektek szerint csoportosítunk, és ezen belül adjuk meg a napokat:
 
 10-11
 insnet
@@ -505,7 +767,39 @@ ciggar
   );
   //$("#time_entry_container").wrap(`<div id="arpy-enhance-container"></div>`);
   $("#time_entry_container").after(`<div id="preview-container" class="well"></div>`);
-  $("#time_entry_container").before(`<div id="favorites-container" class="well"><ul id="favorites-list"></ul></div>`);
+  $("#time_entry_container").before(`<div id="favorites-container" class="well">
+    <div class="quick-filter-container">
+       <div id="fav-sort-controls" class="btn-group">
+        <button type="button" class="btn btn-mini" data-sort="default" title="Eredeti sorrend (hozzáadás szerint)">
+          Alapértelmezett
+        </button>
+        <button type="button" class="btn btn-mini" data-sort="label" title="Címke szerint ABC sorrendbe">
+          Címke
+        </button>
+        <button type="button" class="btn btn-mini" data-sort="category" title="Kategória szerint ABC sorrendbe">
+          Kategória
+        </button>
+      </div>
+      <input class="quick-filter-input" placeholder="Gyorsszűrés">
+    </div>
+    <ul id="favorites-list"></ul>
+  </div>`);
+
+  document.querySelector('.quick-filter-input').addEventListener('input', (ev) => {
+    const term = ev.target.value?.toLowerCase();
+    document.querySelectorAll("#favorites-list li").forEach((li) => {
+      if (!term || li.textContent.toLowerCase().includes(term) || li.querySelector('input')?.value?.toLowerCase().includes(term)) {
+        li.style.display = '';
+      } else {
+        li.style.display = 'none';
+      }
+    });
+
+  });
+
+  setupMinimalResizing();
+
+  setupFavoriteSorting();
 
   $("#todo_item_id").after(
     '<button class="btn btn-primary btn-sm" type="button" id="add-fav-button"><span class="i">★</span> Fav</button>'
@@ -566,9 +860,10 @@ ciggar
     });
 
     let currentDate = moment();
-    let currentProjectData = null;
+    let currentProjectData = [];
+    let shouldPopProjectData = false;
     if (Object.keys(projectData).length === 3) {
-      currentProjectData = projectData;
+      currentProjectData.push(projectData);
     }
     const errors = [];
 
@@ -588,20 +883,31 @@ ciggar
         if (maybeDate.isValid()) {
           currentDate = maybeDate;
         } else {
-          const fav = favorites.find((f) => f.label === lineParts[0]);
+          let labelFromLine = lineParts[0];
+
+          const matches = labelFromLine.match(/^(\/|\\)?(.*?)(\/|\\)?$/);
+          const hasSlash = matches[1] || matches[3];
+          if (hasSlash) {
+            shouldPopProjectData = true;
+            labelFromLine = matches[2];
+          }
+          const fav = favorites.find((f) => f.label === labelFromLine);
           if (fav) {
-            currentProjectData = {
+            currentProjectData.push({
               label: fav.label,
               project_id: fav.project_id.value,
               todo_list_id: fav.todo_list_id.value,
               todo_item_id: fav.todo_item_id.value
-            };
+            });
           }
         }
         return;
       }
       let localCurrentDate = currentDate;
-      let localCurrentProjectData = currentProjectData;
+      let localCurrentProjectData = shouldPopProjectData ? currentProjectData.pop() : currentProjectData[currentProjectData.length - 1];
+      if (shouldPopProjectData) {
+        shouldPopProjectData = false;
+      }
       let currentLabel = (localCurrentProjectData && localCurrentProjectData.label) || "";
       console.log("initial current label", currentLabel);
 
@@ -647,7 +953,8 @@ ciggar
       getIssueNumber(2);
 
       let externallyFetchedProjectData;
-      if (issueNumber?.match(/^\d+$/)) {
+      let rmProjectName;
+      if (REDMINE_API_KEY && issueNumber?.match(/^\d+$/)) {
         let promise = redmineCache[issueNumber];
         updateAsyncProgress("issue", "start");
         if (!promise) {
@@ -659,17 +966,25 @@ ciggar
           }).then((response) => response.json());
           redmineCache[issueNumber] = promise;
         }
-        updateAsyncProgress("issue", "end");
         const json = await promise;
-        const arpyField = json.issue.custom_fields.find(({ name }) => name === "Arpy jelentés");
+        updateAsyncProgress("issue", "end");
+
+        const arpyField = json.issue.custom_fields?.find(({ name }) => name === "Arpy jelentés");
+        rmProjectName = json.issue.project.name;
         if (arpyField?.value) {
           // kategória / todo megkeresése
           // először a fav-ok között keressük
-          const arpyFieldValue = arpyField.value;
+          const arpyFieldValue = arpyField.value.trim();
+          console.group("SEARCH FAV FOR", arpyField.value);
+          console.log("SEARCH FAV FOR", arpyField.value);
           const fav = findTodoDataByFullLabelString(arpyFieldValue);
+          console.groupEnd("SEARCH FAV FOR", arpyField.value);
           if (fav) {
-            console.log("found", fav);
+            console.log("FOUND FAV FOR", arpyField.value, fav);
             currentLabel = fav.label;
+            if (!fav.label) {
+              console.log("no label for", arpyFieldValue);
+            }
             externallyFetchedProjectData = {
               project_id: fav.project_id.value,
               todo_list_id: fav.todo_list_id.value,
@@ -678,11 +993,16 @@ ciggar
             }
           } else {
             // aztán a lenyílók értékei között
-            const arpyParts = arpyFieldValue.split(" / ");
+            const arpyParts = arpyFieldValue.trim().split(" / ");
             console.log("arpyParts", arpyParts);
-            const projectOption = Array.from(document.querySelectorAll(`#project_id optgroup[label="${arpyParts[0]}"] option`)).find(
+            let projectOption = Array.from(document.querySelectorAll(`#project_id optgroup[label="${arpyParts[0]}"] option`)).find(
               (option) => option.innerText === arpyParts[1]
             );
+            if (!projectOption) {
+              projectOption = Array.from(document.querySelectorAll(`#project_id optgroup option`)).find(
+                (option) => option.innerText === arpyParts[0]
+              );
+            }
             if (projectOption) {
               const projectId = projectOption.value;
               updateAsyncProgress("todoList", "start");
@@ -707,7 +1027,10 @@ ciggar
                 const todoItems = await todoItemsPromise;
                 updateAsyncProgress("todoItems", "end");
                 console.log("todoItems", projectId, todoList.id, todoItems);
-                const todoItem = todoItems.find(({ content }) => content === arpyParts[3]);
+                const lastPart = arpyParts[4] ? `${arpyParts[3]} / ${arpyParts[4]}` : arpyParts[3];
+                const todoItem = todoItems.find(
+                  ({ content }) => content === lastPart
+                );
                 if (todoItem) {
                   currentLabel = arpyField.value;
                   externallyFetchedProjectData = {
@@ -719,6 +1042,8 @@ ciggar
                   }
                 }
               }
+            } else {
+              console.log("not found for", arpyParts);
             }
           }
         }
@@ -751,6 +1076,7 @@ ciggar
         outputDataObject.label = currentLabel;
         outputDataObject.isAutomaticLabel = !!externallyFetchedProjectData;
         outputDataObject.arpyField = externallyFetchedProjectData?.arpyField;
+        outputDataObject.rmProjectName = rmProjectName;
       }
 
       const parsedHours = Number.parseFloat(hours);
@@ -825,8 +1151,10 @@ ciggar
   }
 
   async function updatePreview() {
-    const result = await parseBatchData();
+    const savedActiveTab = localStorage.getItem('arpyEnhanceActiveTab') || 'dates';
     const previewContainer = document.getElementById("preview-container");
+    const prevScrollTop = previewContainer.scrollTop;
+    const result = await parseBatchData();
     previewContainer.innerHTML = "";
     const mainTitle = document.createElement("h4");
     mainTitle.innerHTML = "Előnézet";
@@ -845,16 +1173,51 @@ ciggar
     if (!result.summarizedData) {
       return;
     }
-    ["dates", "labels"].forEach((sumType) => {
+    const previewTabs = document.createElement('ul');
+    previewTabs.classList.add('preview-tabs', 'nav', 'nav-tabs');
+    previewContainer.appendChild(previewTabs);
+
+    ["dates", "labels"].forEach((sumType, i) => {
+
+      const previewTab = document.createElement('li');
+      const previewTabA = document.createElement('a');
+      previewTabA.src = "#";
+      previewTab.appendChild(previewTabA);
+
+      const previewTabContentContainer = document.createElement('div');
+      if (sumType === savedActiveTab) {
+        previewTab.classList.add('active');
+      } else {
+        previewTabContentContainer.style.display = 'none';
+      }
+
+      previewTabContentContainer.classList.add("preview-tab-content")
       const data = result.summarizedData[sumType];
-      const title = document.createElement("h3");
-      title.innerText = {
+      previewTabA.innerText = {
         dates: "Napi bontás",
         labels: "Projekt/kategória szerint"
       }[sumType];
-      previewContainer.appendChild(title);
+
+      previewTab.addEventListener('click', () => {
+         localStorage.setItem('arpyEnhanceActiveTab', sumType);
+        document.querySelectorAll('.preview-tab-content').forEach(
+          (element) => element.style.display = 'none'
+        );
+        Array.from(previewTabs.querySelectorAll('li')).forEach((tab) => {
+          tab.classList.remove('active');
+        });
+        previewTab.classList.add('active');
+        previewTabContentContainer.style.display = '';
+      });
+      previewTabs.appendChild(previewTab);
+
+      const stats = document.createElement("div");
+      stats.classList.add('statistics');
+      previewTabContentContainer.appendChild(stats);
       const table = document.createElement("table");
-      previewContainer.appendChild(table);
+      previewTabContentContainer.appendChild(table);
+      previewContainer.appendChild(previewTabContentContainer);
+      let dayHours = [];
 
       Object.entries(data).forEach(([key, value], i, dataEntries) => {
         // hiányzó napok berakása
@@ -895,6 +1258,9 @@ ciggar
         sumRow.appendChild(catTh);
         const sumTh = document.createElement("th");
         sumTh.innerHTML = value.sum;
+        if (value.sum >= 8.0) {
+          sumRow.classList.add("okay");
+        }
         sumRow.appendChild(sumTh);
         if (sumType === "dates") {
           const visualisationTh = document.createElement("th");
@@ -906,17 +1272,22 @@ ciggar
               <div
                 class="preview-visualisation-block"
                 title="${row["time_entry[hours]"]} ${row["time_entry[description]"]}"
-                style="display: inline-block; width: ${54 * parseFloat(row["time_entry[hours]"]) - 4}px"
+                style="width: ${54 * parseFloat(row["time_entry[hours]"]) - 4}px"
               >
+                <span>${row["time_entry[hours]"]}</span>
               </div>
             `).join('')}
           </div>
         `;
           sumRow.appendChild(visualisationTh);
+          dayHours.push(value.sum);
         }
 
         value.entries.forEach((row, j, rows) => {
           const tr = document.createElement("tr");
+          if (value.sum >= 8.0) {
+            tr.classList.add("okay");
+          }
           if (j === rows.length - 1) {
             tr.classList.add("section-last-row");
           }
@@ -956,7 +1327,7 @@ ciggar
                 cell.innerHTML = value;
               }
             } else {
-              cell.innerHTML = row.label;
+              cell.innerHTML = `${row.label}${row.rmProjectName ? `(${row.rmProjectName})`: '' }`;
             }
 
             tr.appendChild(cell);
@@ -964,16 +1335,31 @@ ciggar
         });
       });
 
+      if (sumType === "dates") {
+        const szum = dayHours.reduce((a, c) => a + c, 0);
+        stats.innerHTML = `
+          <div>szum = ${szum}</div>
+          <div>munkanapok száma = ${dayHours.length}</div>
+          <div>napi átlag = ${(szum / dayHours.length).toFixed(2)}</div>
+          <div>hiányzó = ${(dayHours.length * 8 - szum).toFixed(2)}</div>
+        `
+      }
+
     });
 
-
+    previewContainer.scrollTop = prevScrollTop;
   }
-
+  let inputTimeout;
   document.getElementById('batch-textarea').addEventListener('input', function(ev) {
+    if (inputTimeout) {
+      clearTimeout(inputTimeout);
+    }
     window.localStorage.batchTextareaSavedValue = ev.target.value;
-    updatePreview();
+    inputTimeout = setTimeout(() => updatePreview(), 500);
   });
-
+  const formTopContentContainer = document.createElement('div');
+  Array.from(document.querySelectorAll('#time_entry_container form > input, #time_entry_container form > select, #time_entry_container form > button')).forEach((el) => formTopContentContainer.appendChild(el));
+  document.querySelector("#time_entry_container form").prepend(formTopContentContainer);
   $("#submit-batch-button").button().on( "click", async function() {
     console.log("batch button pressed");
     status('');
@@ -1007,6 +1393,4 @@ ciggar
     postBatch();
   });
 
-
 }());
-
