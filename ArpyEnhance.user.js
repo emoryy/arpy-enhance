@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ArpyEnhance
 // @namespace    hu.emoryy
-// @version      0.14
+// @version      0.15
 // @description  enhances Arpy
 // @author       Emoryy
 // @require      https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js
@@ -10,7 +10,7 @@
 // @include      https://arpy.dbx.hu/timelog*
 // @downloadURL  https://github.com/emoryy/arpy-enhance/raw/master/ArpyEnhance.user.js
 // @icon         https://icons.duckduckgo.com/ip2/dbx.hu.ico
-// ==/UserScript==
+// ==/UserScript==c
 
 (function() {
   'use strict';
@@ -211,7 +211,10 @@
       overflow-y: auto;
       min-height: 0;
       li {
-        padding: 3px;
+        padding: 2px;
+        display: flex;
+        align-items: center;
+        column-gap: 4px;
         .label {
           padding-top: 3px;
           background: #00CC9F;
@@ -232,6 +235,7 @@
       padding: 0 5px !important;
       border: 1px solid transparent;
       background: transparent;
+      margin-right: 4px;
     }
     #favorites-list li input:hover, #favorites-list li input:focus {
       border: 1px solid #777;
@@ -242,6 +246,12 @@
       padding: 1px 5px;
       vertical-align: top;
       margin-right: 5px;
+    }
+
+    #favorites-list li .label-important {
+      margin-right: 5px;
+      background-color: #B94A48;
+      cursor: help;
     }
 
     #open-help-dialog {
@@ -458,6 +468,26 @@
     previewContainer.innerHTML = Object.entries(asyncStatus.start).map(([type, count]) => `<div>${type}: ${asyncStatus.end[type] || 0}/${count}</div>`).join("\n");
   }
 
+  function fetchAndCache(url, cacheKey) {
+    let promise = arpyCache[cacheKey];
+    if (!promise) {
+      promise = fetch(url).then((response) => {
+        if (!response.ok) {
+          // If the server returns an error (e.g., 404), treat it as an empty list
+          console.warn(`Failed to fetch ${url}, status: ${response.status}`);
+          return [];
+        }
+        return response.json();
+      }).catch((error) => {
+        console.error(`Error fetching ${url}:`, error);
+        delete arpyCache[cacheKey]; // Remove failed requests from cache
+        return []; // Return an empty array on failure
+      });
+      arpyCache[cacheKey] = promise;
+    }
+    return promise;
+  }
+
   function addNewFavorite() {
     const formData = $('form[action="/timelog"]').serializeArray();
     const fav = {
@@ -522,6 +552,64 @@
     saveFavorites();
   }
 
+  async function checkFavoritesValidity() {
+    console.log("Starting full validation of favorites...");
+    const projectOptions = new Map(
+      Array.from(document.querySelectorAll('#project_id option')).map((opt) => [opt.value, opt])
+    );
+
+    const validationPromises = favorites.map(async (fav) => {
+      // Assume the favorite is valid until a check fails
+      fav.isInvalid = false;
+
+      // 1. Check if the Project exists in the main dropdown.
+      if (!fav.project_id?.value || !projectOptions.has(fav.project_id.value)) {
+        fav.isInvalid = true;
+        return; // Stop checking if the project is gone
+      }
+
+      // A favorite with only a project is valid at this point.
+      // If there's no todo_list_id, we're done with this favorite.
+      if (!fav.todo_list_id?.value) {
+        return;
+      }
+
+      // 2. Fetch and check if the Todo List exists for that project.
+      const todoLists = await fetchAndCache(
+        `/get_todo_lists?project_id=${fav.project_id.value}&show_completed=false`,
+        `projectId-${fav.project_id.value}`
+      );
+
+      // Note: Using '==' for loose comparison as IDs can be string/number
+      const todoListExists = todoLists.some((list) => list.id == fav.todo_list_id.value);
+      if (!todoListExists) {
+        fav.isInvalid = true;
+        return; // Stop checking if the list is gone
+      }
+
+      // A favorite with a project + list is valid at this point.
+      // If there's no todo_item_id, we're done.
+      if (!fav.todo_item_id?.value) {
+        return;
+      }
+
+      // 3. Fetch and check if the Todo Item exists for that list.
+      const todoItems = await fetchAndCache(
+        `/get_todo_items?todo_list_id=${fav.todo_list_id.value}&show_completed=false`,
+        `todoListId-${fav.todo_list_id.value}`
+      );
+
+      const todoItemExists = todoItems.some(item => item.id == fav.todo_item_id.value);
+      if (!todoItemExists) {
+        fav.isInvalid = true;
+      }
+    });
+
+    // Wait for all the asynchronous validation checks to complete.
+    await Promise.all(validationPromises);
+    console.log("Favorite validation complete.");
+  }
+
   function remove(array, element) {
     return array.filter(e => e !== element);
   }
@@ -533,6 +621,9 @@
         ${labelParts.map((part) => `<span class="label label-info">${part}</span>`).join("\n")}
       </li>
     `);
+    if (fav.isInvalid) {
+      newLi.prepend('<span class="label label-important" title="Ez a kategória már nem létezik vagy lezárásra került.">LEZÁRT</span> ');
+    }
     const labelInput = $('<input placeholder="- címke helye -">');
     labelInput.val(fav.label);
     labelInput.change(function() {
@@ -599,6 +690,34 @@
     favorites = remove(favorites, fav);
     saveFavorites();
     renderFavs();
+  }
+
+  function updateClearButtonVisibility() {
+    const invalidCount = favorites.filter((fav) => fav.isInvalid).length;
+    const clearButton = $('#clear-invalid-favs-button');
+    if (invalidCount > 0) {
+      clearButton.text(`✖ [${invalidCount}]`).show();
+    } else {
+      clearButton.hide();
+    }
+  }
+
+  // This function sets up the click event for the new button.
+  function setupClearInvalidButton() {
+    $('#clear-invalid-favs-button').on('click', () => {
+      const invalidFavs = favorites.filter((fav) => fav.isInvalid);
+      if (invalidFavs.length === 0) {
+        return; // Safety check
+      }
+
+      if (window.confirm(`Biztosan törölni akarod a(z) ${invalidFavs.length} lejárt kedvencet?`)) {
+        // Keep only the valid favorites
+        favorites = favorites.filter((fav) => !fav.isInvalid);
+        saveFavorites();
+        renderFavs();
+        updateClearButtonVisibility(); // Re-check visibility, which will hide the button
+      }
+    });
   }
 
   function setupMinimalResizing() {
@@ -792,6 +911,9 @@ ciggar
           Kategória
         </button>
       </div>
+      <button id="clear-invalid-favs-button" type="button" class="btn btn-mini btn-danger" title="Az összes lezárt / nem létező kategóriára hivatkozó (pirossal jelölt) kedvenc törlése." style="display: none;">
+        ✖
+      </button>
       <input class="quick-filter-input" placeholder="Gyorsszűrés">
       <button id="maximize-button" type="button" class="btn btn-mini" data-sort="label" style="font-size: 18px;" title="Teljes magasság">
         ⬍
@@ -845,8 +967,11 @@ ciggar
   );
   $("#add-fav-button").button().on( "click", addNewFavorite);
 
-
-  renderFavs();
+  checkFavoritesValidity().then(() => {
+    renderFavs();
+    updateClearButtonVisibility();
+  });
+  setupClearInvalidButton();
 
   // add help text popup and button
   $("#submit-batch-button").before(
@@ -932,6 +1057,9 @@ ciggar
           }
           const fav = favorites.find((f) => f.label === labelFromLine);
           if (fav) {
+            if (fav.isInvalid) {
+              errors.push(`${lineNumber + 1}. sor: A(z) "<b>${fav.label}</b>" címke egy lezárt/nem létező kategóriára hivatkozik!`);
+            }
             currentProjectData.push({
               label: fav.label,
               project_id: fav.project_id.value,
