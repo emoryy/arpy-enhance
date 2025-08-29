@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ArpyEnhance
 // @namespace    hu.emoryy
-// @version      0.13
+// @version      0.14
 // @description  enhances Arpy
 // @author       Emoryy
 // @require      https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js
@@ -196,6 +196,9 @@
       display: flex;
       flex-direction: column;
       position: relative;
+      &.maximalized {
+        max-height: none !important;
+      }
     }
     #favorites-list li input {
       width: 80px;
@@ -390,6 +393,15 @@
       &:hover:before {
         border-top: 4px solid #444;
       }
+    }
+    #favorites-container.maximalized #minimal-vertical-resizer {
+      display: none;
+    }
+    #favorites-container.maximalized + #time_entry_container {
+      height: 85vh !important;
+    }
+    #favorites-container.maximalized ~ #preview-container {
+      height: 85vh !important;
     }
 
   `);
@@ -781,6 +793,9 @@ ciggar
         </button>
       </div>
       <input class="quick-filter-input" placeholder="Gyorsszűrés">
+      <button id="maximize-button" type="button" class="btn btn-mini" data-sort="label" style="font-size: 18px;" title="Teljes magasság">
+        ⬍
+      </button>
     </div>
     <ul id="favorites-list"></ul>
   </div>`);
@@ -796,6 +811,30 @@ ciggar
     });
 
   });
+
+  const maximizeButton = document.querySelector('#maximize-button');
+
+  function setupMaximalizeState() {
+    if (localStorage.getItem('arpyEnhanceFavsMaxed') === 'true') {
+      const favoritesPanel = document.querySelector("#favorites-container");
+      favoritesPanel.classList.add('maximalized');
+      maximizeButton.innerHTML = "◱";
+    }
+  }
+
+  maximizeButton.addEventListener('click', function() {
+    const favoritesPanel = document.querySelector("#favorites-container");
+    favoritesPanel.classList.toggle('maximalized');
+    if (favoritesPanel.classList.contains('maximalized')) {
+      localStorage.setItem('arpyEnhanceFavsMaxed', 'true');
+      maximizeButton.innerHTML = "◱";
+    } else {
+      localStorage.removeItem('arpyEnhanceFavsMaxed');
+      maximizeButton.innerHTML = "⬍";
+    }
+  });
+
+  setupMaximalizeState();
 
   setupMinimalResizing();
 
