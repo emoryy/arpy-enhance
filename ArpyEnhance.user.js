@@ -1,21 +1,24 @@
 // ==UserScript==
 // @name         ArpyEnhance
 // @namespace    hu.emoryy
-// @version      0.15
+// @version      0.16
 // @description  enhances Arpy
 // @author       Emoryy
 // @require      https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js
-// @require      https://cdnjs.cloudflare.com/ajax/libs/less.js/4.1.2/less.min.js
+// @resource     MONACO_CSS https://cdn.jsdelivr.net/npm/monaco-editor@0.49.0/min/vs/editor/editor.main.css
+// @grant        GM_getResourceText
+// @grant        GM_addStyle
+// @grant        unsafeWindow
 // @include      http://arpy.dbx.hu/timelog*
 // @include      https://arpy.dbx.hu/timelog*
 // @downloadURL  https://github.com/emoryy/arpy-enhance/raw/master/ArpyEnhance.user.js
 // @icon         https://icons.duckduckgo.com/ip2/dbx.hu.ico
-// ==/UserScript==c
+// ==/UserScript==
 
 (function() {
   'use strict';
 
-  const REDMINE_API_KEY = localStorage.REDMINE_API_KEY;
+  const REDMINE_API_KEY = unsafeWindow.localStorage.REDMINE_API_KEY;
 
   let link = document.querySelector("link[rel~='icon']");
   if (!link) {
@@ -33,7 +36,8 @@
   moment.locale("hu");
 
   let favorites = [];
-  let favoriteSortOrder = localStorage.getItem('arpyEnhanceFavoriteSortOrder') || 'default';
+  let monacoEditorInstance = null;
+  let favoriteSortOrder = unsafeWindow.localStorage.getItem('arpyEnhanceFavoriteSortOrder') || 'default';
 
   const redmineCache = {};
   const arpyCache = {};
@@ -99,8 +103,18 @@
             color: white;
           }
         }
-        tr.is-automatic-label td, tr.is-automatic-label th {
-           background-color: #c4ecd7;
+        .is-automatic-label td:first-child {
+          position: relative;
+          background: rgba(255,77,77,0.49) !important;
+          &:before {
+            content: "💎";
+            filter: hue-rotate(130deg);
+            display: inline-block;
+            position: absolute;
+            left: -1px;
+            top: 4px;
+            font-size: 13px;
+          }
         }
         tr td:first-child,
         th {
@@ -190,6 +204,7 @@
     }
     #time_entry_container .lastrow {
       width: initial !important;
+      margin-top: 10px;
     }
     #favorites-container {
       max-height: 20vh;
@@ -319,7 +334,10 @@
         }
       }
     }
-
+    #time_entry_container > form,
+    #time_entry_container .description {
+      min-height: 0;
+    }
     .quick-filter-container {
       position: absolute;
       right: 35px;
@@ -414,6 +432,10 @@
       height: 85vh !important;
     }
 
+    .suggest-widget .monaco-list .monaco-list-row {
+      width: max-content !important;
+      min-width: 100% !important;
+    }
   `);
 
   function fallbackCopyTextToClipboard(text) {
@@ -543,7 +565,7 @@
   }
 
   function saveFavorites() {
-    window.localStorage.favorites = JSON.stringify(favorites);
+    unsafeWindow.localStorage.favorites = JSON.stringify(favorites);
   }
 
   function updateFav(id, label) {
@@ -720,6 +742,255 @@
     });
   }
 
+  function setupArpyLanguageAndTheme() {
+    // --- Define Language ---
+    monaco.languages.register({ id: 'arpy-log' });
+
+    monaco.languages.setMonarchTokensProvider('arpy-log', {
+      defaultToken: "invalid",
+
+      tokenizer: {
+        root: [
+          // Rule 1: Comment lines
+          [/^\s*#.*$/, "comment"],
+
+          // Rule 2: Date Label lines (must be the only thing on the line)
+          [/^\s*(\d{4}-\d{2}-\d{2}|\d{2}-\d{2})\s*$/, "date.label"],
+
+          // Rule 3: Category Label lines (must be the only thing on the line)
+          [/^\s*\S+\s*$/, "category.label"],
+
+          // Rule 4: Work Hour Entry lines. Match the start and transition to a dedicated parser.
+          [
+            /^\s*(-|\d{4}-\d{2}-\d{2}|\d{2}-\d{2})/,
+            {
+              cases: {
+                "-": { token: "delimiter", next: "@expect_number" },
+                "@default": { token: "date.entry", next: "@expect_number" },
+              },
+            },
+          ],
+        ],
+
+        expect_number: [
+          // After the date/dash, we expect mandatory whitespace, then a number.
+          [/\s+/, ""], // Consume whitespace, assign no token.
+          [/(\d+([,.]\d+)?)/, { token: "number", next: "@expect_description" }],
+
+          // If we don't find whitespace and a number, the rest of the line is invalid.
+          [/.*$/, { token: "invalid", next: "@popall" }],
+        ],
+
+        expect_description: [
+          // The remainder of the line is the description.
+          // This state will now correctly handle an optional ticket number at the start.
+
+          // Consume the single space separating the number from the description.
+          [/\s/, ""],
+
+          // Look for a ticket number at the beginning of the description.
+          [/#\d+/, { token: "ticket.number", next: "@description_rest" }],
+
+          // If no ticket number is found, transition immediately to parse the rest.
+          // The empty regex acts as a fall-through.
+          ["", { token: "", next: "@description_rest" }],
+        ],
+
+        description_rest: [
+          // Whatever is left on the line is the description text.
+          [/.*$/, { token: "description", next: "@popall" }],
+        ],
+      },
+    });
+
+    // --- Define Vibrant Light Theme (with a new color for ticket numbers) ---
+    monaco.editor.defineTheme('arpy-light-vibrant', {
+      base: 'vs',
+      inherit: false,
+      rules: [
+        {
+          token: "comment",
+          foreground: "#6e6e6eff",
+          background: "#000000ff",
+          fontStyle: "italic"
+        }, // Vibrant Green
+        { token: "date.label", foreground: "#008000", fontStyle: "bold" }, // Bright Blue
+        {
+          token: "category.label",
+          foreground: "#9400D3",
+          fontStyle: "bold",
+        }, // Dark Violet
+        { token: "date.entry", foreground: "#008000", fontStyle: "bold" },
+        { token: "delimiter", foreground: "#008000", fontStyle: "bold" },
+        { token: "number", foreground: "#008fe2ff", fontStyle: "bold" },
+        { token: "ticket.number", foreground: "#ff3c00ff" },
+        { token: "description", foreground: "#222222" },
+        { token: "invalid", foreground: "#a93f3fff", fontStyle: "bold" },
+      ].map((rule) => {
+        if (rule.foreground) {
+          rule.foreground = rule.foreground.replace(/^#/, '');
+        }
+        if (rule.background) {
+          rule.background = rule.background.replace(/^#/, '');
+        }
+        return rule;
+      }),
+      colors: {
+        "editor.background": "#FFFFFF",
+        "editor.foreground": "#222222",
+        'editor.wordHighlightBackground': '#e9e9e9ff',
+        "editorGutter.background": "#FFFFFF",
+        "editorCursor.foreground": "#000000",
+        "editor.lineHighlightBackground": "#00000000",
+        "editor.lineHighlightBorder": "#00000000",
+        "editor.selectionBackground": "#ADD6FF",
+        "editorWidget.background": "#F3F3F3",
+        "editorWidget.border": "#C8C8C8",
+        "editorSuggestWidget.background": "#F3F3F3",
+        "editorSuggestWidget.foreground": "#222222",
+        "editorSuggestWidget.selectedBackground": "#0076c0ff",
+        "editorSuggestWidget.selectedForeground": "#ffffffff",
+        "editorSuggestWidget.highlightForeground": "#0076c0ff",
+        "list.focusHighlightForeground": "#ffffff",
+        "editorHoverWidget.background": "#F3F3F3",
+        "input.background": "#FFFFFF",
+        "input.foreground": "#222222",
+        "input.border": "#C8C8C8",
+        "list.hoverBackground": "#E8E8E8",
+        "list.activeSelectionBackground": "#6dc7ffff",
+        "scrollbarSlider.background": "#C8C8C8",
+        "scrollbarSlider.hoverBackground": "#B0B0B0",
+        "scrollbarSlider.activeBackground": "#989898",
+      },
+    });
+  }
+
+  function initializeMonacoEditor() {
+    const monacoCss = GM_getResourceText('MONACO_CSS');
+    GM_addStyle(monacoCss);
+
+    const loaderScript = document.createElement('script');
+    loaderScript.src = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.49.0/min/vs/loader.js';
+    document.head.appendChild(loaderScript);
+
+    loaderScript.onload = () => {
+      unsafeWindow.require.config({
+        paths: { 'vs': 'https://cdn.jsdelivr.net/npm/monaco-editor@0.49.0/min/vs' }
+      });
+
+      unsafeWindow.require(['vs/editor/editor.main'], () => {
+        const originalTextarea = document.getElementById('batch-textarea');
+        const editorContainer = document.createElement('div');
+        editorContainer.id = 'monaco-editor-container';
+        editorContainer.style.flex = '1 1 auto';
+        editorContainer.style.border = '1px solid #ccc';
+
+        originalTextarea.parentElement.insertBefore(editorContainer, originalTextarea);
+        originalTextarea.style.display = 'none';
+
+        // 1. Define everything first. Our theme is now robust.
+        setupArpyLanguageAndTheme();
+
+        // 2. Create the editor directly with the final theme.
+        const editor = monaco.editor.create(editorContainer, {
+          value: originalTextarea.value,
+          language: 'arpy-log',
+          theme: 'arpy-light-vibrant',
+          automaticLayout: true,
+          wordWrap: 'on',
+          fontSize: 14,
+          fontFamily: 'monospace',
+          wordBasedSuggestions: false,
+          tabSize: 2,
+          insertSpaces: true,
+        });
+
+        // 3. Assign instance and attach the update listener.
+        monacoEditorInstance = editor;
+
+      let lastDimensions = { width: 0, height: 0 };
+      const editorParent = document.querySelector('#time_entry_container .description');
+      const editorObserver = new ResizeObserver((entries) => {
+        const { width, height } = entries[0].contentRect;
+        if (width !== lastDimensions.width || height !== lastDimensions.height) {
+          lastDimensions = { width, height };
+          if (monacoEditorInstance) {
+            monacoEditorInstance.layout({ width, height });
+          }
+        }
+      });
+
+      editorObserver.observe(editorParent);
+
+      monaco.languages.registerCompletionItemProvider('plaintext', {
+        provideCompletionItems: () => {
+          return { suggestions: [] };
+        }
+      });
+
+      monaco.languages.registerCompletionItemProvider('arpy-log', {
+        provideCompletionItems: function(model, position) {
+          const wordInfo = model.getWordUntilPosition(position);
+          const lineContent = model.getLineContent(position.lineNumber);
+          const textBeforeWord = lineContent.substring(0, wordInfo.startColumn - 1);
+
+          // NEW LOGIC: Only trigger if the text on the line BEFORE the current word is whitespace.
+          if (textBeforeWord.trim() !== '') {
+            return { suggestions: [] };
+          }
+
+          const suggestions = favorites
+            // Filter out favorites that don't have a label.
+            .filter((fav) => fav.label && fav.label.trim() !== '')
+            // Filter suggestions to match what the user has started typing.
+            .filter((fav) => fav.label.toLowerCase().includes(wordInfo.word.toLowerCase()))
+            .map((fav) => {
+              const range = {
+                startLineNumber: position.lineNumber,
+                endLineNumber: position.lineNumber,
+                startColumn: wordInfo.startColumn,
+                endColumn: wordInfo.endColumn
+              };
+              const fullLabel = getFullLabelPartsForFav(fav).join(' / ');
+              return {
+                  label: {
+                  label: fav.label,
+                  description: fullLabel
+                },
+                kind: monaco.languages.CompletionItemKind.Enum,
+                insertText: fav.label,
+                // detail: getFullLabelPartsForFav(fav).join(' / '),
+                documentation: fullLabel,
+                range: range
+              };
+            });
+
+            return { suggestions: suggestions };
+          }
+        });
+        editor.onDidChangeModelContent(() => {
+          const currentValue = editor.getValue();
+          originalTextarea.value = currentValue;
+
+          unsafeWindow.localStorage.batchTextareaSavedValue = currentValue;
+          if (unsafeWindow.inputTimeout) {
+            clearTimeout(unsafeWindow.inputTimeout);
+          }
+          unsafeWindow.inputTimeout = setTimeout(() => updatePreview(), 500);
+        });
+
+        // Trigger initial preview if there's content
+        if (originalTextarea.value) {
+          updatePreview();
+        }
+      });
+    };
+
+    loaderScript.onerror = () => {
+      console.error("ArpyEnhance: Failed to load Monaco Editor's loader.js.");
+    };
+  }
+
   function setupMinimalResizing() {
     const topPanel = document.getElementById('favorites-container');
     const bottomPanel1 = document.getElementById('time_entry_container');
@@ -751,7 +1022,7 @@
       bottomPanel2.style.height = bottomHeightCss;
     };
 
-    const savedVh = localStorage.getItem(STORAGE_KEY);
+    const savedVh = unsafeWindow.localStorage.getItem(STORAGE_KEY);
     applyVhHeights(savedVh ? parseFloat(savedVh) : DEFAULT_TOP_VH);
 
     resizer.addEventListener('mousedown', (e) => {
@@ -937,7 +1208,7 @@ ciggar
   const maximizeButton = document.querySelector('#maximize-button');
 
   function setupMaximalizeState() {
-    if (localStorage.getItem('arpyEnhanceFavsMaxed') === 'true') {
+    if (unsafeWindow.localStorage.getItem('arpyEnhanceFavsMaxed') === 'true') {
       const favoritesPanel = document.querySelector("#favorites-container");
       favoritesPanel.classList.add('maximalized');
       maximizeButton.innerHTML = "◱";
@@ -1007,8 +1278,9 @@ ciggar
     updatePreview();
   }
 
-  async function parseBatchData(options = { }) {
-    const textareaValue = $('#batch-textarea').val();
+  async function parseBatchData(textareaValue, options = { }) {
+    // const textareaValue = $('#batch-textarea').val();
+
     if(!textareaValue || !(textareaValue.trim())) {
       return { errors: ["no data"] };
     }
@@ -1108,8 +1380,8 @@ ciggar
       const hours = lineParts.shift();
       let issueNumber;
       function getIssueNumber(i) {
-        if (!issueNumber && /#?([A-Z0-9]+-)?\d+$/.test(lineParts[i])) {
-          issueNumber = lineParts[i].match(/#?(.+)/)[1]; // esetleges # kiszedése
+        if (!issueNumber && /(^#\d+$)|(^[A-Z0-9]+-\d+$)/.test(lineParts[i])) {
+          issueNumber = lineParts[i].match(/#?(.+)/)[1]; // szám kinyerése
           if (lineParts.length > 1 && i === 0) {
             lineParts.shift();
           }
@@ -1283,12 +1555,6 @@ ciggar
       return { errors };
     }
 
-    // if (debug) {
-    //   parsedBatchData.forEach(function(bd) {
-    //     console.log(bd.project_id, bd.todo_list_id, bd.todo_item_id, bd["time_entry[date]"], bd["time_entry[hours]"], bd["time_entry[description]"]);
-    //   });
-    // }
-
     // dátum alapján csoportosított adatok sorbarendezése
     summarizedData.dates = Object.entries(summarizedData.dates).sort((a, b) => {
       if (a[0] < b[0]) {
@@ -1318,10 +1584,11 @@ ciggar
   }
 
   async function updatePreview() {
-    const savedActiveTab = localStorage.getItem('arpyEnhanceActiveTab') || 'dates';
+    const savedActiveTab = unsafeWindow.localStorage.getItem('arpyEnhanceActiveTab') || 'dates';
     const previewContainer = document.getElementById("preview-container");
     const prevScrollTop = previewContainer.scrollTop;
-    const result = await parseBatchData();
+    const editorValue = monacoEditorInstance ? monacoEditorInstance.getValue() : document.getElementById('batch-textarea').value;
+    const result = await parseBatchData(editorValue);
     previewContainer.innerHTML = "";
     const mainTitle = document.createElement("h4");
     mainTitle.innerHTML = "Előnézet";
@@ -1516,21 +1783,15 @@ ciggar
 
     previewContainer.scrollTop = prevScrollTop;
   }
-  let inputTimeout;
-  document.getElementById('batch-textarea').addEventListener('input', function(ev) {
-    if (inputTimeout) {
-      clearTimeout(inputTimeout);
-    }
-    window.localStorage.batchTextareaSavedValue = ev.target.value;
-    inputTimeout = setTimeout(() => updatePreview(), 500);
-  });
+
   const formTopContentContainer = document.createElement('div');
   Array.from(document.querySelectorAll('#time_entry_container form > input, #time_entry_container form > select, #time_entry_container form > button')).forEach((el) => formTopContentContainer.appendChild(el));
   document.querySelector("#time_entry_container form").prepend(formTopContentContainer);
   $("#submit-batch-button").button().on( "click", async function() {
     console.log("batch button pressed");
     status('');
-    const parsedBatchData = (await parseBatchData({ nometa: !debug })).data;
+    const editorValue = monacoEditorInstance ? monacoEditorInstance.getValue() : document.getElementById('batch-textarea').value;
+    const parsedBatchData = (await parseBatchData(editorValue, { nometa: !debug })).data;
 
     const progressElement = window.document.getElementById("enhance-progress");
     progressElement.style.display = "block";
@@ -1559,5 +1820,7 @@ ciggar
     };
     postBatch();
   });
+
+  initializeMonacoEditor()
 
 }());
