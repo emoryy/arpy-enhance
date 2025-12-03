@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ArpyEnhance
 // @namespace    hu.emoryy
-// @version      0.16
+// @version      0.17
 // @description  enhances Arpy
 // @author       Emoryy
 // @require      https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js
@@ -19,6 +19,7 @@
   'use strict';
 
   const REDMINE_API_KEY = unsafeWindow.localStorage.REDMINE_API_KEY;
+  const REDMINE_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
   let link = document.querySelector("link[rel~='icon']");
   if (!link) {
@@ -41,6 +42,90 @@
 
   const redmineCache = {};
   const arpyCache = {};
+
+  // Load Redmine cache from localStorage and clean expired entries
+  function loadRedmineCacheFromStorage() {
+    try {
+      const stored = unsafeWindow.localStorage.getItem('arpyEnhanceRedmineCache');
+      if (stored) {
+        const parsedCache = JSON.parse(stored);
+        const now = Date.now();
+
+        // Clean expired entries and load valid ones
+        Object.entries(parsedCache).forEach(([issueNumber, entry]) => {
+          if (entry.timestamp && (now - entry.timestamp) <= REDMINE_CACHE_TTL_MS) {
+            redmineCache[issueNumber] = entry;
+          }
+        });
+      }
+    } catch (e) {
+      console.error('Failed to load Redmine cache from localStorage:', e);
+    }
+  }
+
+  // Save Redmine cache to localStorage
+  function saveRedmineCacheToStorage() {
+    try {
+      unsafeWindow.localStorage.setItem('arpyEnhanceRedmineCache', JSON.stringify(redmineCache));
+    } catch (e) {
+      console.error('Failed to save Redmine cache to localStorage:', e);
+    }
+  }
+
+  // Check if a Redmine cache entry is expired
+  function isRedmineCacheExpired(issueNumber) {
+    const cacheEntry = redmineCache[issueNumber];
+    if (!cacheEntry || !cacheEntry.timestamp) {
+      return true;
+    }
+    const now = Date.now();
+    return (now - cacheEntry.timestamp) > REDMINE_CACHE_TTL_MS;
+  }
+
+  // Fetch Redmine issue data with cache management
+  async function fetchRedmineIssue(issueNumber, forceReload = false) {
+    if (!REDMINE_API_KEY || !issueNumber?.match(/^\d+$/)) {
+      return null;
+    }
+
+    // Check if we should use cache (data is already resolved in cache)
+    if (!forceReload && redmineCache[issueNumber] && !isRedmineCacheExpired(issueNumber)) {
+      return redmineCache[issueNumber].data;
+    }
+
+    // Fetch fresh data
+    const response = await fetch(`https://redmine.dbx.hu/issues/${issueNumber}.json`, {
+      headers: {
+        "Content-Type": "application/json",
+        "X-Redmine-API-Key": REDMINE_API_KEY
+      }
+    });
+    const data = await response.json();
+
+    // Store in cache with timestamp
+    redmineCache[issueNumber] = {
+      data: data,
+      timestamp: Date.now()
+    };
+
+    // Persist to localStorage
+    saveRedmineCacheToStorage();
+
+    return data;
+  }
+
+  // Force reload a specific Redmine ticket and update preview
+  async function reloadRedmineTicket(issueNumber) {
+    if (!issueNumber) {
+      return;
+    }
+
+    // Force reload from API
+    await fetchRedmineIssue(issueNumber, true);
+
+    // Update the preview
+    await updatePreview();
+  }
 
   function addCss(cssString) {
     const head = document.getElementsByTagName('head')[0];
@@ -127,6 +212,28 @@
           font-family: monospace;
           text-align: left;
           padding: 4px;
+        }
+        .redmine-reload-btn {
+          margin-left: 4px;
+          padding: 0px 4px;
+          font-size: 11px;
+          line-height: 1.2;
+          border: 1px solid #999;
+          background: #f5f5f5;
+          border-radius: 3px;
+          cursor: pointer;
+          vertical-align: middle;
+          &:hover {
+            background: #e0e0e0;
+            border-color: #666;
+          }
+          &:active {
+            background: #d0d0d0;
+          }
+          &.loading {
+            opacity: 0.6;
+            cursor: wait;
+          }
         }
         td:nth-child(3) {
           white-space: nowrap;
@@ -436,6 +543,50 @@
       width: max-content !important;
       min-width: 100% !important;
     }
+    #timelog-page {
+      position: relative;
+      #favorites-container {
+        order: 1;
+      }
+      #time_entry_container {
+        order: 2;
+      }
+      #preview-container {
+        order: 3;
+      }
+      #month_selector {
+        order: 4;
+      }
+      #time_log {
+        order: 5;
+      }
+    }
+    #time_entry_container,
+    #preview-container {
+      position: relative;
+    }
+    .panel-swap-button {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      padding: 2px 4px;
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+      transition: background-color 0.2s;
+      z-index: 5;
+      &:hover {
+        background: #ccc;
+      }
+    }
+    #timelog-page.panels-swapped {
+      #time_entry_container {
+        order: 3;
+      }
+      #preview-container {
+        order: 2;
+      }
+    }
   `);
 
   function fallbackCopyTextToClipboard(text) {
@@ -680,6 +831,7 @@
         favoriteSortOrder = newSortOrder;
         localStorage.setItem('arpyEnhanceFavoriteSortOrder', newSortOrder);
         renderFavs();
+        applyQuickFilter();
       }
     });
   }
@@ -712,6 +864,7 @@
     favorites = remove(favorites, fav);
     saveFavorites();
     renderFavs();
+    applyQuickFilter();
   }
 
   function updateClearButtonVisibility() {
@@ -738,6 +891,7 @@
         saveFavorites();
         renderFavs();
         updateClearButtonVisibility(); // Re-check visibility, which will hide the button
+        applyQuickFilter();
       }
     });
   }
@@ -1066,6 +1220,9 @@
 
   try { favorites = JSON.parse(window.localStorage.favorites); } catch(e) { }
 
+  // Load Redmine cache from localStorage
+  loadRedmineCacheFromStorage();
+
   const placeholderText = `-- Formátum help --
 Gyors példa:
 
@@ -1169,6 +1326,8 @@ ciggar
   );
   //$("#time_entry_container").wrap(`<div id="arpy-enhance-container"></div>`);
   $("#time_entry_container").after(`<div id="preview-container" class="well"></div>`);
+  $("#time_entry_container").prepend(`<button type="button" class="btn btn-mini panel-swap-button" title="Panelek cseréje">⬌</button>`);
+  $("#preview-container").prepend(`<button type="button" class="btn btn-mini panel-swap-button" title="Panelek cseréje">⬌</button>`);
   $("#time_entry_container").before(`<div id="favorites-container" class="well">
     <div class="quick-filter-container">
        <div id="fav-sort-controls" class="btn-group">
@@ -1193,8 +1352,12 @@ ciggar
     <ul id="favorites-list"></ul>
   </div>`);
 
-  document.querySelector('.quick-filter-input').addEventListener('input', (ev) => {
-    const term = ev.target.value?.toLowerCase();
+  // Apply quick filter to favorites list
+  function applyQuickFilter() {
+    const filterInput = document.querySelector('.quick-filter-input');
+    if (!filterInput) return;
+
+    const term = filterInput.value?.toLowerCase();
     document.querySelectorAll("#favorites-list li").forEach((li) => {
       if (!term || li.textContent.toLowerCase().includes(term) || li.querySelector('input')?.value?.toLowerCase().includes(term)) {
         li.style.display = '';
@@ -1202,8 +1365,9 @@ ciggar
         li.style.display = 'none';
       }
     });
+  }
 
-  });
+  document.querySelector('.quick-filter-input').addEventListener('input', applyQuickFilter);
 
   const maximizeButton = document.querySelector('#maximize-button');
 
@@ -1212,6 +1376,13 @@ ciggar
       const favoritesPanel = document.querySelector("#favorites-container");
       favoritesPanel.classList.add('maximalized');
       maximizeButton.innerHTML = "◱";
+    }
+  }
+
+  function setupPanelSwapState() {
+    if (unsafeWindow.localStorage.getItem('arpyEnhancePanelsSwapped') === 'true') {
+      const timelogPage = document.querySelector("#timelog-page");
+      timelogPage.classList.add('panels-swapped');
     }
   }
 
@@ -1227,7 +1398,21 @@ ciggar
     }
   });
 
+  const panelSwapButtons = document.querySelectorAll('.panel-swap-button');
+  panelSwapButtons.forEach(button => {
+    button.addEventListener('click', function() {
+      const timelogPage = document.querySelector("#timelog-page");
+      timelogPage.classList.toggle('panels-swapped');
+      if (timelogPage.classList.contains('panels-swapped')) {
+        localStorage.setItem('arpyEnhancePanelsSwapped', 'true');
+      } else {
+        localStorage.removeItem('arpyEnhancePanelsSwapped');
+      }
+    });
+  });
+
   setupMaximalizeState();
+  setupPanelSwapState();
 
   setupMinimalResizing();
 
@@ -1394,18 +1579,8 @@ ciggar
       let externallyFetchedProjectData;
       let rmProjectName;
       if (REDMINE_API_KEY && issueNumber?.match(/^\d+$/)) {
-        let promise = redmineCache[issueNumber];
         updateAsyncProgress("issue", "start");
-        if (!promise) {
-          promise = fetch(`https://redmine.dbx.hu/issues/${issueNumber}.json`, {
-            headers: {
-              "Content-Type": "application/json",
-              "X-Redmine-API-Key": REDMINE_API_KEY
-            }
-          }).then((response) => response.json());
-          redmineCache[issueNumber] = promise;
-        }
-        const json = await promise;
+        const json = await fetchRedmineIssue(issueNumber);
         updateAsyncProgress("issue", "end");
 
         const arpyField = json.issue.custom_fields?.find(({ name }) => name === "Arpy jelentés");
@@ -1744,19 +1919,44 @@ ciggar
               if (key === "time_entry[issue_number]" && value) {
                 let url;
                 let prefix = '';
+                let isRedmineIssue = false;
+                let issueNumber;
                 if (/^#?\d+$/.test(value)) {
-                  const issueNumber = value.match(/^#?(.+)/)[1];
+                  issueNumber = value.match(/^#?(.+)/)[1];
                   url = `https://redmine.dbx.hu/issues/${issueNumber}`;
                   prefix = "#";
+                  isRedmineIssue = true;
                 } else if (/^[A-Z0-9]+-\d+$/.test(value)) {
                   url = `https://youtrack.dbx.hu/issue/${value}`;
-
                 }
+
                 cell.innerHTML = `
                   <a href="${url}" target="_blank">
                     ${prefix}${value}
                   </a>
                 `;
+
+                // Add reload button for Redmine issues
+                if (isRedmineIssue && REDMINE_API_KEY) {
+                  const reloadBtn = document.createElement("button");
+                  reloadBtn.className = "redmine-reload-btn";
+                  reloadBtn.innerHTML = "&#8635;"; // Reload icon
+                  reloadBtn.title = "Redmine ticket újratöltése";
+                  reloadBtn.setAttribute("data-issue-number", issueNumber);
+                  reloadBtn.addEventListener("click", async function(e) {
+                    e.preventDefault();
+                    const btn = e.currentTarget;
+                    btn.classList.add("loading");
+                    btn.disabled = true;
+                    try {
+                      await reloadRedmineTicket(issueNumber);
+                    } finally {
+                      btn.classList.remove("loading");
+                      btn.disabled = false;
+                    }
+                  });
+                  cell.appendChild(reloadBtn);
+                }
               } else {
                 cell.innerHTML = value;
               }
