@@ -5,9 +5,6 @@
 // @description  enhances Arpy
 // @author       Emoryy
 // @require      https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js
-// @resource     MONACO_CSS https://cdn.jsdelivr.net/npm/monaco-editor@0.49.0/min/vs/editor/editor.main.css
-// @grant        GM_getResourceText
-// @grant        GM_addStyle
 // @grant        unsafeWindow
 // @include      http://arpy.dbx.hu/timelog*
 // @include      https://arpy.dbx.hu/timelog*
@@ -20,6 +17,8 @@
 
   const REDMINE_API_KEY = unsafeWindow.localStorage.REDMINE_API_KEY;
   const REDMINE_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+  const MONACO_CSS_URL = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.49.0/min/vs/editor/editor.main.css';
+  const ORIGINAL_BOTTOM_OFFSET_PX = 90;
 
   let link = document.querySelector("link[rel~='icon']");
   if (!link) {
@@ -39,6 +38,17 @@
   let favorites = [];
   let monacoEditorInstance = null;
   let favoriteSortOrder = unsafeWindow.localStorage.getItem('arpyEnhanceFavoriteSortOrder') || 'default';
+
+  // Helper function to update Monaco layout with explicit dimensions
+  const updateMonacoLayout = () => {
+    if (monacoEditorInstance) {
+      const editorContainer = document.getElementById('monaco-editor-container');
+      if (editorContainer) {
+        const rect = editorContainer.getBoundingClientRect();
+        monacoEditorInstance.layout({ width: rect.width, height: rect.height });
+      }
+    }
+  };
 
   const redmineCache = {};
   const arpyCache = {};
@@ -148,8 +158,18 @@
         flex: 1 1 100%;
         width: auto !important;
       }
+      #editor-preview-wrapper {
+        flex: 1 1 100%;
+        display: flex;
+        flex-wrap: nowrap;
+        gap: 10px;
+        margin: 10px;
+        margin-bottom: 0;
+        min-width: 0;
+      }
       #time_entry_container {
-        flex: 1 1 45%;
+        flex: 1 1 0;
+        min-width: 0;
         .description {
           display: flex;
         }
@@ -158,7 +178,8 @@
         }
       }
       #preview-container {
-        flex: 1 1 45%;
+        flex: 1 1 0;
+        min-width: 0;
         position: relative;
         h3 {
           padding: 0 10px;
@@ -257,7 +278,6 @@
     }
     #status {
       display: inline-block;
-      width: 500px;
       text-align: right;
       font-size: 16px;
       overflow: hidden;
@@ -298,27 +318,96 @@
     #preview-container
     {
       flex: 0 1 auto;
-      padding: 10px;
       margin: 10px;
       border-radius: 5px;
     }
+    /* Unified panel structure */
+    #time_entry_container,
+    #favorites-container,
     #preview-container {
-      padding-left: 20px;
+      padding: 0 !important;
+      display: flex;
+      flex-direction: column;
     }
-    #preview-container, #time_entry_container {
-      height: calc(80vh - 130px);
+
+    /* Panels inside wrapper should fill wrapper's height and remove margins */
+    #editor-preview-wrapper > #time_entry_container,
+    #editor-preview-wrapper > #preview-container {
+      height: 100%;
+      margin: 0 !important;
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 10px;
+      background: linear-gradient(to bottom, #e8e8e8, #d0d0d0);
+      border-bottom: 1px solid #999;
+      border-radius: 5px 5px 0 0;
+      min-height: 28px;
+      flex-shrink: 0;
+    }
+
+    .panel-content {
+      flex: 1;
       overflow: auto;
+      padding: 10px;
+      min-height: 0;
+      min-width: 0;
+    }
+
+    #favorites-container .panel-content {
+      padding: 10px;
+    }
+
+    #time_entry_container .panel-content {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #time_entry_container form,
+    #time_entry_container .description {
+      flex: 1;
+      min-height: 0;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #monaco-editor-container {
+      min-height: 0;
+      height: 100%;
+      width: 100%;
+      max-width: 100%;
+      overflow: hidden;
+    }
+    .panel-header-title {
+      font-weight: 600;
+      font-size: 13px;
+      color: #333;
+      margin: 0;
+      padding: 0;
+      line-height: 20px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .panel-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
     #time_entry_container .lastrow {
       width: initial !important;
       margin-top: 10px;
+      white-space: nowrap;
     }
     #favorites-container {
       max-height: 20vh;
-      display: flex;
-      flex-direction: column;
       position: relative;
       &.maximalized {
+        height: auto !important;
         max-height: none !important;
       }
     }
@@ -327,11 +416,7 @@
     }
     #favorites-list {
       margin: 0;
-      margin-bottom: -10px;
       list-style: none;
-      flex-grow: 1;
-      overflow-y: auto;
-      min-height: 0;
       li {
         padding: 2px;
         display: flex;
@@ -446,22 +531,15 @@
       min-height: 0;
     }
     .quick-filter-container {
-      position: absolute;
-      right: 35px;
-      top: 10px;
-      width: auto;
       display: flex;
-      justify-content: flex-end;
       align-items: center;
-      gap: 10px;
-      padding: 5px 7px;
-      background: #ddd;
-      border-radius: 7px;
-      z-index: 2;
+      gap: 6px;
       input {
-        padding-left: 5px;
-        border-radius: 5px;
+        padding: 2px 5px;
+        border-radius: 3px;
         border: 1px solid #aaa;
+        font-size: 12px;
+        height: 22px;
       }
     }
     #fav-sort-controls .btn.active {
@@ -532,10 +610,7 @@
     #favorites-container.maximalized #minimal-vertical-resizer {
       display: none;
     }
-    #favorites-container.maximalized + #time_entry_container {
-      height: 85vh !important;
-    }
-    #favorites-container.maximalized ~ #preview-container {
+    #favorites-container.maximalized + #editor-preview-wrapper {
       height: 85vh !important;
     }
 
@@ -548,17 +623,14 @@
       #favorites-container {
         order: 1;
       }
-      #time_entry_container {
+      #editor-preview-wrapper {
         order: 2;
       }
-      #preview-container {
+      #month_selector {
         order: 3;
       }
-      #month_selector {
-        order: 4;
-      }
       #time_log {
-        order: 5;
+        order: 4;
       }
     }
     #time_entry_container,
@@ -566,25 +638,26 @@
       position: relative;
     }
     .panel-swap-button {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      padding: 2px 4px;
+      padding: 2px 6px;
       cursor: pointer;
-      font-size: 16px;
+      font-size: 14px;
       line-height: 1;
       transition: background-color 0.2s;
-      z-index: 5;
+      border: 1px solid #999;
+      background: #f5f5f5;
+      border-radius: 3px;
       &:hover {
-        background: #ccc;
+        background: #e0e0e0;
       }
     }
     #timelog-page.panels-swapped {
-      #time_entry_container {
-        order: 3;
-      }
-      #preview-container {
-        order: 2;
+      #editor-preview-wrapper {
+        #time_entry_container {
+          order: 2;
+        }
+        #preview-container {
+          order: 1;
+        }
       }
     }
   `);
@@ -637,8 +710,8 @@
 
   function updateAsyncProgress(type, status) {
     asyncStatus[status][type] = (asyncStatus[status][type] || 0) + 1;
-    const previewContainer = document.getElementById("preview-container");
-    previewContainer.innerHTML = Object.entries(asyncStatus.start).map(([type, count]) => `<div>${type}: ${asyncStatus.end[type] || 0}/${count}</div>`).join("\n");
+    const previewContent = document.getElementById("preview-content");
+    previewContent.innerHTML = Object.entries(asyncStatus.start).map(([type, count]) => `<div>${type}: ${asyncStatus.end[type] || 0}/${count}</div>`).join("\n");
   }
 
   function fetchAndCache(url, cacheKey) {
@@ -1020,8 +1093,11 @@
   }
 
   function initializeMonacoEditor() {
-    const monacoCss = GM_getResourceText('MONACO_CSS');
-    GM_addStyle(monacoCss);
+    // Load Monaco CSS
+    const cssLink = document.createElement('link');
+    cssLink.rel = 'stylesheet';
+    cssLink.href = MONACO_CSS_URL;
+    document.head.appendChild(cssLink);
 
     const loaderScript = document.createElement('script');
     loaderScript.src = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.49.0/min/vs/loader.js';
@@ -1036,7 +1112,7 @@
         const originalTextarea = document.getElementById('batch-textarea');
         const editorContainer = document.createElement('div');
         editorContainer.id = 'monaco-editor-container';
-        editorContainer.style.flex = '1 1 auto';
+        editorContainer.style.flex = '1 1 0';
         editorContainer.style.border = '1px solid #ccc';
 
         originalTextarea.parentElement.insertBefore(editorContainer, originalTextarea);
@@ -1050,7 +1126,7 @@
           value: originalTextarea.value,
           language: 'arpy-log',
           theme: 'arpy-light-vibrant',
-          automaticLayout: true,
+          automaticLayout: false,
           wordWrap: 'on',
           fontSize: 14,
           fontFamily: 'monospace',
@@ -1062,19 +1138,14 @@
         // 3. Assign instance and attach the update listener.
         monacoEditorInstance = editor;
 
-      let lastDimensions = { width: 0, height: 0 };
-      const editorParent = document.querySelector('#time_entry_container .description');
-      const editorObserver = new ResizeObserver((entries) => {
-        const { width, height } = entries[0].contentRect;
-        if (width !== lastDimensions.width || height !== lastDimensions.height) {
-          lastDimensions = { width, height };
-          if (monacoEditorInstance) {
-            monacoEditorInstance.layout({ width, height });
+        // Manual layout on explicit events only (no observers to avoid feedback loops)
+        let resizeRAF;
+        window.addEventListener('resize', () => {
+          if (resizeRAF) {
+            cancelAnimationFrame(resizeRAF);
           }
-        }
-      });
-
-      editorObserver.observe(editorParent);
+          resizeRAF = requestAnimationFrame(updateMonacoLayout);
+        });
 
       monaco.languages.registerCompletionItemProvider('plaintext', {
         provideCompletionItems: () => {
@@ -1147,10 +1218,9 @@
 
   function setupMinimalResizing() {
     const topPanel = document.getElementById('favorites-container');
-    const bottomPanel1 = document.getElementById('time_entry_container');
-    const bottomPanel2 = document.getElementById('preview-container');
+    const bottomWrapper = document.getElementById('editor-preview-wrapper');
 
-    if (!topPanel || !bottomPanel1 || !bottomPanel2) {
+    if (!topPanel || !bottomWrapper) {
       return;
     }
 
@@ -1159,7 +1229,6 @@
     topPanel.appendChild(resizer);
 
     const STORAGE_KEY = 'arpyEnhanceTopPanelVh';
-    const ORIGINAL_BOTTOM_OFFSET_PX = 130; // The original offset from CSS
     const DEFAULT_TOP_VH = 20;
 
     const applyVhHeights = (topVh) => {
@@ -1170,14 +1239,17 @@
       const constrainedTopVh = Math.max(2, Math.min(topVh, 90));
       const bottomVh = 100 - constrainedTopVh;
 
+      topPanel.style.height = `${constrainedTopVh}vh`;
       topPanel.style.maxHeight = `${constrainedTopVh}vh`;
       const bottomHeightCss = `calc(${bottomVh}vh - ${ORIGINAL_BOTTOM_OFFSET_PX}px)`;
-      bottomPanel1.style.height = bottomHeightCss;
-      bottomPanel2.style.height = bottomHeightCss;
+      bottomWrapper.style.height = bottomHeightCss;
     };
 
     const savedVh = unsafeWindow.localStorage.getItem(STORAGE_KEY);
-    applyVhHeights(savedVh ? parseFloat(savedVh) : DEFAULT_TOP_VH);
+    // Only apply vh heights if not in maximized mode
+    if (!topPanel.classList.contains('maximalized')) {
+      applyVhHeights(savedVh ? parseFloat(savedVh) : DEFAULT_TOP_VH);
+    }
 
     resizer.addEventListener('mousedown', (e) => {
       e.preventDefault();
@@ -1193,6 +1265,7 @@
       const startTopContentHeight_px = topPanel.offsetHeight - nonContentHeight;
       const viewportHeight_px = window.innerHeight;
 
+      let moveRAF;
       const handleMouseMove = (moveEvent) => {
         const deltaY_px = moveEvent.clientY - startY_px;
         // The new height is the starting content height plus the mouse delta.
@@ -1201,6 +1274,12 @@
         const newTop_vh = (newTopContentHeight_px / viewportHeight_px) * 100;
 
         applyVhHeights(newTop_vh);
+
+        // Update Monaco layout continuously during drag (throttled via RAF)
+        if (moveRAF) {
+          cancelAnimationFrame(moveRAF);
+        }
+        moveRAF = requestAnimationFrame(updateMonacoLayout);
       };
 
       const handleMouseUp = () => {
@@ -1208,6 +1287,9 @@
         const finalContentHeight_px = topPanel.offsetHeight - nonContentHeight;
         const final_vh = (finalContentHeight_px / window.innerHeight) * 100;
         localStorage.setItem(STORAGE_KEY, final_vh.toFixed(2));
+
+        // Update Monaco editor layout after resize
+        setTimeout(updateMonacoLayout, 50);
 
         document.removeEventListener('mousemove', handleMouseMove);
         document.removeEventListener('mouseup', handleMouseUp);
@@ -1324,32 +1406,68 @@ ciggar
   $("#time_entry_description").after(
     `<textarea id="batch-textarea" placeholder="${placeholderText}" class="textarea ui-widget-content ui-corner-all" spellcheck="false"></textarea>`
   );
-  //$("#time_entry_container").wrap(`<div id="arpy-enhance-container"></div>`);
-  $("#time_entry_container").after(`<div id="preview-container" class="well"></div>`);
-  $("#time_entry_container").prepend(`<button type="button" class="btn btn-mini panel-swap-button" title="Panelek cseréje">⬌</button>`);
-  $("#preview-container").prepend(`<button type="button" class="btn btn-mini panel-swap-button" title="Panelek cseréje">⬌</button>`);
-  $("#time_entry_container").before(`<div id="favorites-container" class="well">
-    <div class="quick-filter-container">
-       <div id="fav-sort-controls" class="btn-group">
-        <button type="button" class="btn btn-mini" data-sort="default" title="Eredeti sorrend (hozzáadás szerint)">
-          Alapértelmezett
-        </button>
-        <button type="button" class="btn btn-mini" data-sort="label" title="Címke szerint ABC sorrendbe">
-          Címke
-        </button>
-        <button type="button" class="btn btn-mini" data-sort="category" title="Kategória szerint ABC sorrendbe">
-          Kategória
-        </button>
+  // Wrap time_entry_container content in panel-content
+  const timeEntryContainer = document.getElementById('time_entry_container');
+  const timeEntryContent = document.createElement('div');
+  timeEntryContent.className = 'panel-content';
+  while (timeEntryContainer.firstChild) {
+    timeEntryContent.appendChild(timeEntryContainer.firstChild);
+  }
+  timeEntryContainer.appendChild(timeEntryContent);
+
+  $("#time_entry_container").prepend(`
+    <div class="panel-header">
+      <div class="panel-header-title">Szerkesztő</div>
+      <div class="panel-header-actions">
+        <button type="button" class="btn btn-mini panel-swap-button" title="Panelek cseréje">⬌</button>
       </div>
-      <button id="clear-invalid-favs-button" type="button" class="btn btn-mini btn-danger" title="Az összes lezárt / nem létező kategóriára hivatkozó (pirossal jelölt) kedvenc törlése." style="display: none;">
-        ✖
-      </button>
-      <input class="quick-filter-input" placeholder="Gyorsszűrés">
-      <button id="maximize-button" type="button" class="btn btn-mini" data-sort="label" style="font-size: 18px;" title="Teljes magasság">
-        ⬍
-      </button>
     </div>
-    <ul id="favorites-list"></ul>
+  `);
+
+  // Create preview container after editor
+  $("#time_entry_container").after(`<div id="preview-container" class="well">
+    <div class="panel-header">
+      <div class="panel-header-title">Előnézet</div>
+      <div class="panel-header-actions">
+        <button type="button" class="btn btn-mini panel-swap-button" title="Panelek cseréje">⬌</button>
+      </div>
+    </div>
+    <div class="panel-content" id="preview-content"></div>
+  </div>`);
+
+  // Wrap editor and preview in a container
+  $("#time_entry_container, #preview-container").wrapAll('<div id="editor-preview-wrapper"></div>');
+
+  // Insert favorites at the beginning of the page
+  $("#timelog-page").prepend(`<div id="favorites-container" class="well">
+    <div class="panel-header">
+      <div class="panel-header-title">Kategóriák</div>
+      <div class="panel-header-actions">
+        <div class="quick-filter-container">
+          <div id="fav-sort-controls" class="btn-group">
+            <button type="button" class="btn btn-mini" data-sort="default" title="Eredeti sorrend (hozzáadás szerint)">
+              Alapértelmezett
+            </button>
+            <button type="button" class="btn btn-mini" data-sort="label" title="Címke szerint ABC sorrendbe">
+              Címke
+            </button>
+            <button type="button" class="btn btn-mini" data-sort="category" title="Kategória szerint ABC sorrendbe">
+              Kategória
+            </button>
+          </div>
+          <button id="clear-invalid-favs-button" type="button" class="btn btn-mini btn-danger" title="Az összes lezárt / nem létező kategóriára hivatkozó (pirossal jelölt) kedvenc törlése." style="display: none;">
+            ✖
+          </button>
+          <input class="quick-filter-input" placeholder="Gyorsszűrés">
+          <button id="maximize-button" type="button" class="btn btn-mini" data-sort="label" style="font-size: 16px;" title="Teljes magasság">
+            ⬍
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="panel-content">
+      <ul id="favorites-list"></ul>
+    </div>
   </div>`);
 
   // Apply quick filter to favorites list
@@ -1374,8 +1492,13 @@ ciggar
   function setupMaximalizeState() {
     if (unsafeWindow.localStorage.getItem('arpyEnhanceFavsMaxed') === 'true') {
       const favoritesPanel = document.querySelector("#favorites-container");
+      const wrapper = document.querySelector("#editor-preview-wrapper");
       favoritesPanel.classList.add('maximalized');
       maximizeButton.innerHTML = "◱";
+      // Set wrapper to 85vh and clear favorites height constraints
+      wrapper.style.height = '85vh';
+      favoritesPanel.style.height = '';
+      favoritesPanel.style.maxHeight = '';
     }
   }
 
@@ -1388,14 +1511,29 @@ ciggar
 
   maximizeButton.addEventListener('click', function() {
     const favoritesPanel = document.querySelector("#favorites-container");
+    const wrapper = document.querySelector("#editor-preview-wrapper");
+
     favoritesPanel.classList.toggle('maximalized');
     if (favoritesPanel.classList.contains('maximalized')) {
       localStorage.setItem('arpyEnhanceFavsMaxed', 'true');
       maximizeButton.innerHTML = "◱";
+      // Set wrapper to 85vh and clear favorites height constraints
+      wrapper.style.height = '85vh';
+      favoritesPanel.style.height = '';
+      favoritesPanel.style.maxHeight = '';
     } else {
       localStorage.removeItem('arpyEnhanceFavsMaxed');
       maximizeButton.innerHTML = "⬍";
+      // Restore the vh-based heights from saved value
+      const savedVh = parseFloat(localStorage.getItem('arpyEnhanceTopPanelVh') || '20');
+      const bottomVh = 100 - savedVh;
+      favoritesPanel.style.height = `${savedVh}vh`;
+      favoritesPanel.style.maxHeight = `${savedVh}vh`;
+      wrapper.style.height = `calc(${bottomVh}vh - ${ORIGINAL_BOTTOM_OFFSET_PX}px)`;
     }
+
+    // Adjust Monaco editor after panel resize
+    setTimeout(updateMonacoLayout, 50);
   });
 
   const panelSwapButtons = document.querySelectorAll('.panel-swap-button');
@@ -1760,18 +1898,15 @@ ciggar
 
   async function updatePreview() {
     const savedActiveTab = unsafeWindow.localStorage.getItem('arpyEnhanceActiveTab') || 'dates';
-    const previewContainer = document.getElementById("preview-container");
-    const prevScrollTop = previewContainer.scrollTop;
+    const previewContent = document.getElementById("preview-content");
+    const prevScrollTop = previewContent.scrollTop;
     const editorValue = monacoEditorInstance ? monacoEditorInstance.getValue() : document.getElementById('batch-textarea').value;
     const result = await parseBatchData(editorValue);
-    previewContainer.innerHTML = "";
-    const mainTitle = document.createElement("h4");
-    mainTitle.innerHTML = "Előnézet";
-    mainTitle.style = "font-variant: small-caps;";
-    previewContainer.appendChild(mainTitle);
+
+    previewContent.innerHTML = "";
     if (result.errors) {
       const list = document.createElement("ul");
-      previewContainer.appendChild(list);
+      previewContent.appendChild(list);
 
       result.errors.forEach((error) => {
         const errorItem = document.createElement("li");
@@ -1784,7 +1919,7 @@ ciggar
     }
     const previewTabs = document.createElement('ul');
     previewTabs.classList.add('preview-tabs', 'nav', 'nav-tabs');
-    previewContainer.appendChild(previewTabs);
+    previewContent.appendChild(previewTabs);
 
     ["dates", "labels"].forEach((sumType, i) => {
 
@@ -1825,7 +1960,7 @@ ciggar
       previewTabContentContainer.appendChild(stats);
       const table = document.createElement("table");
       previewTabContentContainer.appendChild(table);
-      previewContainer.appendChild(previewTabContentContainer);
+      previewContent.appendChild(previewTabContentContainer);
       let dayHours = [];
 
       Object.entries(data).forEach(([key, value], i, dataEntries) => {
@@ -1981,7 +2116,7 @@ ciggar
 
     });
 
-    previewContainer.scrollTop = prevScrollTop;
+    previewContent.scrollTop = prevScrollTop;
   }
 
   const formTopContentContainer = document.createElement('div');
