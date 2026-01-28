@@ -161,6 +161,17 @@
     #timelog_page_wrapper {
       background-color: var(--bg-tertiary) !important;
     }
+    .navbar-inner .container {
+      width: auto !important;
+      display: flex;
+      justify-content: center;
+    }
+    @media screen and (max-width: 1282px) {
+      body {
+        padding-top: 80px !important;
+      }
+    }
+
 
     #time_entry_container,
     #project_select_container,

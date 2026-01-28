@@ -8,7 +8,7 @@ export default defineConfig({
       userscript: {
         name: 'ArpyEnhance',
         namespace: 'hu.emoryy',
-        version: '0.16.0',
+        version: '0.16.1',
         description: 'enhances Arpy',
         author: 'Emoryy',
         match: [
