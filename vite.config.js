@@ -1,5 +1,8 @@
 import { defineConfig } from 'vite';
 import monkey from 'vite-plugin-monkey';
+import { readFileSync } from 'fs';
+
+const pkg = JSON.parse(readFileSync('./package.json', 'utf-8'));
 
 export default defineConfig({
   plugins: [
@@ -8,7 +11,7 @@ export default defineConfig({
       userscript: {
         name: 'ArpyEnhance',
         namespace: 'hu.emoryy',
-        version: '0.16.1',
+        version: pkg.version,
         description: 'enhances Arpy',
         author: 'Emoryy',
         match: [

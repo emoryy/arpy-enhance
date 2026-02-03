@@ -1,6 +1,6 @@
 {
   "name": "arpy-enhance",
-  "version": "0.16.1",
+  "version": "0.16.2",
   "description": "ArpyEnhance userscript - enhances Arpy work hour reporting",
   "type": "module",
   "scripts": {

@@ -34,9 +34,14 @@ function resetAsyncProgress() {
  * Update async progress display (for Redmine/Arpy API fetches)
  * Only updates if the generation matches the current parse run
  */
-function updateAsyncProgress(type, status, generation) {
+function updateAsyncProgress(type, status, generation, silent = false) {
   // Ignore updates from stale parse runs
   if (generation !== currentParseGeneration) {
+    return;
+  }
+
+  // Skip UI updates if in silent mode (e.g., during submission)
+  if (silent) {
     return;
   }
 
@@ -104,6 +109,7 @@ function findTodoDataByFullLabelString(_fullLabelString, favorites) {
 export async function parseBatchData(textareaValue, favorites, options = {}) {
     // Reset async progress tracking and get generation ID for this parse run
     const parseGeneration = resetAsyncProgress();
+    const silent = options.silent || false;
 
     if(!textareaValue || !(textareaValue.trim())) {
       return { errors: ["no data"] };
@@ -221,7 +227,7 @@ export async function parseBatchData(textareaValue, favorites, options = {}) {
       let rmProjectName;
       const REDMINE_API_KEY = settingsManager.get('redmineApiKey');
       if (REDMINE_API_KEY && issueNumber?.match(/^\d+$/)) {
-        updateAsyncProgress("issue", "start", parseGeneration);
+        updateAsyncProgress("issue", "start", parseGeneration, silent);
         try {
           const json = await fetchRedmineIssue(issueNumber);
 
@@ -262,22 +268,22 @@ export async function parseBatchData(textareaValue, favorites, options = {}) {
                 }
                 if (projectOption) {
                   const projectId = projectOption.value;
-                  updateAsyncProgress("todoList", "start", parseGeneration);
+                  updateAsyncProgress("todoList", "start", parseGeneration, silent);
                   const todoListResponse = await fetchAndCache(
                     `/get_todo_lists?project_id=${projectId}&show_completed=false`,
                     `projectId-${projectId}`
                   );
-                  updateAsyncProgress("todoList", "end", parseGeneration);
+                  updateAsyncProgress("todoList", "end", parseGeneration, silent);
 
                   const todoList = todoListResponse.find(({ name }) => name === arpyParts[2]);
                   console.log("todoList", projectId, todoList);
                   if (todoList) {
-                    updateAsyncProgress("todoItems", "start", parseGeneration);
+                    updateAsyncProgress("todoItems", "start", parseGeneration, silent);
                     const todoItems = await fetchAndCache(
                       `/get_todo_items?todo_list_id=${todoList.id}&show_completed=false`,
                       `todoListId-${todoList.id}`
                     );
-                    updateAsyncProgress("todoItems", "end", parseGeneration);
+                    updateAsyncProgress("todoItems", "end", parseGeneration, silent);
                     console.log("todoItems", projectId, todoList.id, todoItems);
                     const lastPart = arpyParts[4] ? `${arpyParts[3]} / ${arpyParts[4]}` : arpyParts[3];
                     const todoItem = todoItems.find(
@@ -306,7 +312,7 @@ export async function parseBatchData(textareaValue, favorites, options = {}) {
         } catch (e) {
           console.error(`Failed to fetch Redmine issue #${issueNumber}:`, e);
         } finally {
-          updateAsyncProgress("issue", "end", parseGeneration);
+          updateAsyncProgress("issue", "end", parseGeneration, silent);
         }
       }
 
