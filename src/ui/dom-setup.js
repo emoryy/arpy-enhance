@@ -22,13 +22,16 @@ export function createProgressIndicator() {
  */
 export function createBatchSubmitButton() {
   $("#time_entry_submit").before(
-    `<button class="btn btn-danger btn-large" type="button" id="stop-batch-button" style="display: none;"><span class="btn-icon">⏹</span><span class="btn-text"> Stop</span></button>`
+    `<button class="btn btn-danger btn-large" type="button" id="stop-batch-button" style="display: none;"><i class="icon-stop icon-white"></i><span class="btn-text"> Stop</span></button>`
+  );
+  $("#time_entry_submit").before(
+    `<button class="btn btn-warning btn-large" type="button" id="resume-batch-button" style="display: none;"><i class="icon-play icon-white"></i><span class="btn-text"> Folytatás</span></button>`
   );
   $("#time_entry_submit").before(
     `<button class="btn btn-sm" type="button" id="open-help-dialog" title="Formátum help"><span class="i">❓</span></button>`
   );
   $("#time_entry_submit").before(
-    `<button class="btn ${DEBUG ? "btn-danger" : "btn-primary"} btn-large" type="button" id="submit-batch-button"><span class="btn-icon">✓</span><span class="btn-text"> Mentés!</span></button>&nbsp;`
+    `<button class="btn ${DEBUG ? "btn-danger" : "btn-primary"} btn-large" type="button" id="submit-batch-button"><span class="btn-icon"><i class="icon-ok icon-white"></i></span><span class="btn-text"> Mentés!</span></button>&nbsp;`
   );
 }
 

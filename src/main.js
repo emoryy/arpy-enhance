@@ -49,7 +49,7 @@ import { updateMonacoLayout } from './monaco/monaco-layout.js';
 import { updatePreview } from './preview/preview-manager.js';
 
 // Import batch submit
-import { setupBatchSubmitButton, initBatchSubmitModule } from './submission/batch-submit.js';
+import { setupBatchSubmitButton } from './submission/batch-submit.js';
 
 // Import utilities
 import { copyTextToClipboard, status } from './utils/dom-helpers.js';
@@ -159,9 +159,6 @@ import { copyTextToClipboard, status } from './utils/dom-helpers.js';
   initializePanels();
 
   // === Initialize Batch Submit ===
-  initBatchSubmitModule({
-    status
-  });
   setupBatchSubmitButton();
 
   // === Set up form container ===

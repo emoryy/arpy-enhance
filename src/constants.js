@@ -11,6 +11,7 @@ export const DEFAULT_SETTINGS = {
   panelsSwapped: false,
   showProgressIndicator: true,
   showEditorHourIndicator: true,
+  showDayNameInEditor: false,
   targetWorkHours: 8,
   maxDisplayHours: 12
 };

@@ -20,6 +20,7 @@ export class SettingsManager {
       'panelsSwapped': 'arpyEnhancePanelsSwapped',
       'showProgressIndicator': 'arpyEnhanceShowProgressIndicator',
       'showEditorHourIndicator': 'arpyEnhanceShowEditorHourIndicator',
+      'showDayNameInEditor': 'arpyEnhanceShowDayNameInEditor',
       'targetWorkHours': 'arpyEnhanceTargetWorkHours',
       'maxDisplayHours': 'arpyEnhanceMaxDisplayHours'
     };
@@ -31,7 +32,7 @@ export class SettingsManager {
     if (key === 'redmineCacheTtlHours' || key === 'targetWorkHours' || key === 'maxDisplayHours') {
       const val = getStorageItem(storageKey);
       return val ? parseFloat(val) : defaultValue;
-    } else if (key === 'favsMaximized' || key === 'panelsSwapped' || key === 'showProgressIndicator' || key === 'showEditorHourIndicator') {
+    } else if (key === 'favsMaximized' || key === 'panelsSwapped' || key === 'showProgressIndicator' || key === 'showEditorHourIndicator' || key === 'showDayNameInEditor') {
       const val = getStorageItem(storageKey);
       if (val === null) return defaultValue;
       return val === 'true';
@@ -52,6 +53,7 @@ export class SettingsManager {
       'panelsSwapped': 'arpyEnhancePanelsSwapped',
       'showProgressIndicator': 'arpyEnhanceShowProgressIndicator',
       'showEditorHourIndicator': 'arpyEnhanceShowEditorHourIndicator',
+      'showDayNameInEditor': 'arpyEnhanceShowDayNameInEditor',
       'targetWorkHours': 'arpyEnhanceTargetWorkHours',
       'maxDisplayHours': 'arpyEnhanceMaxDisplayHours'
     };
@@ -92,6 +94,7 @@ export class SettingsManager {
       panelsSwapped: this.get('panelsSwapped'),
       showProgressIndicator: this.get('showProgressIndicator'),
       showEditorHourIndicator: this.get('showEditorHourIndicator'),
+      showDayNameInEditor: this.get('showDayNameInEditor'),
       targetWorkHours: this.get('targetWorkHours'),
       maxDisplayHours: this.get('maxDisplayHours')
     };

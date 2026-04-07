@@ -86,6 +86,9 @@ export function createSettingsModal() {
                 <input type="checkbox" id="setting-show-editor-hours"> Óra-összesítő mutatása a szerkesztőben
               </label>
               <label class="checkbox">
+                <input type="checkbox" id="setting-show-day-name"> Nap nevének mutatása az óra-összesítőben
+              </label>
+              <label class="checkbox">
                 <input type="checkbox" id="setting-favs-maximized"> Kedvencek panel maximalizálása
               </label>
               <label class="checkbox">
@@ -118,6 +121,7 @@ export function loadSettingsToModal() {
   document.getElementById('setting-max-hours').value = settings.maxDisplayHours;
   document.getElementById('setting-show-progress').checked = settings.showProgressIndicator;
   document.getElementById('setting-show-editor-hours').checked = settings.showEditorHourIndicator;
+  document.getElementById('setting-show-day-name').checked = settings.showDayNameInEditor;
   document.getElementById('setting-favs-maximized').checked = settings.favsMaximized;
   document.getElementById('setting-panels-swapped').checked = settings.panelsSwapped;
 }
@@ -132,6 +136,7 @@ export function saveSettingsFromModal() {
   const oldTargetHours = settings.targetWorkHours;
   const oldMaxHours = settings.maxDisplayHours;
   const oldShowEditorHours = settings.showEditorHourIndicator;
+  const oldShowDayName = settings.showDayNameInEditor;
   const oldShowProgress = settings.showProgressIndicator;
   const oldFavsMaximized = settings.favsMaximized;
   const oldPanelsSwapped = settings.panelsSwapped;
@@ -144,6 +149,7 @@ export function saveSettingsFromModal() {
   settingsManager.set('maxDisplayHours', parseFloat(document.getElementById('setting-max-hours').value));
   settingsManager.set('showProgressIndicator', document.getElementById('setting-show-progress').checked);
   settingsManager.set('showEditorHourIndicator', document.getElementById('setting-show-editor-hours').checked);
+  settingsManager.set('showDayNameInEditor', document.getElementById('setting-show-day-name').checked);
   settingsManager.set('favsMaximized', document.getElementById('setting-favs-maximized').checked);
   settingsManager.set('panelsSwapped', document.getElementById('setting-panels-swapped').checked);
 
@@ -163,6 +169,7 @@ export function saveSettingsFromModal() {
   if ((oldTargetHours !== newSettings.targetWorkHours ||
       oldMaxHours !== newSettings.maxDisplayHours ||
       oldShowEditorHours !== newSettings.showEditorHourIndicator ||
+      oldShowDayName !== newSettings.showDayNameInEditor ||
       oldShowProgress !== newSettings.showProgressIndicator) && updatePreview) {
     updatePreview();
   }

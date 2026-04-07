@@ -1,6 +1,7 @@
 /**
  * Monaco Editor Decorations Module
  * Handles inline decorations showing hour totals on date lines
+ * and error markers (linting)
  */
 
 import { settingsManager } from '../settings/settings-manager.js';
@@ -8,6 +9,43 @@ import { monacoEditorInstance } from './monaco-setup.js';
 
 // Track decorations collection
 let editorDecorationsCollection = null;
+
+/**
+ * Set Monaco editor markers (linting errors/warnings)
+ * @param {Array} errors - Array of structured error objects {lineNumber, message, severity}
+ */
+export function setEditorMarkers(errors) {
+  if (!monacoEditorInstance) {
+    return;
+  }
+
+  const model = monacoEditorInstance.getModel();
+  if (!model) {
+    return;
+  }
+
+  const markers = errors.map((error) => {
+    const lineContent = model.getLineContent(error.lineNumber) || '';
+    const trimmedContent = lineContent.trim();
+    // Find the actual start column (skip leading whitespace)
+    const leadingWhitespace = lineContent.length - lineContent.trimStart().length;
+    const startColumn = leadingWhitespace + 1;
+    const endColumn = lineContent.length + 1;
+
+    return {
+      startLineNumber: error.lineNumber,
+      endLineNumber: error.lineNumber,
+      startColumn: startColumn,
+      endColumn: endColumn,
+      message: error.message,
+      severity: error.severity === 'warning'
+        ? monaco.MarkerSeverity.Warning
+        : monaco.MarkerSeverity.Error,
+    };
+  });
+
+  monaco.editor.setModelMarkers(model, 'arpy-parser', markers);
+}
 
 /**
  * Update editor decorations with hour indicators on date lines
@@ -94,13 +132,17 @@ export function updateEditorDecorations(summarizedData) {
         const progressDisplay = `\u3010${filledBar}${emptyBar}\u3011${overtimeBar}`; // 【 and 】
         const lineLength = model.getLineContent(lineNumber).length;
 
+        const dayPrefix = settings.showDayNameInEditor
+          ? new Date(fullDate).toLocaleDateString('hu-HU', { weekday: 'long' }) + ' '
+          : '';
+
         console.log(`Adding decoration for line ${lineNumber}: ${fullDate}, sum: ${sum}h`);
 
         decorations.push({
           range: new monaco.Range(lineNumber, 1, lineNumber, lineLength + 1),
           options: {
             after: {
-              content: `  ${sum}h ${progressDisplay}`,
+              content: `  ${dayPrefix}${sum}h ${progressDisplay}`,
               inlineClassName: isOkay ? 'date-decoration okay' : 'date-decoration'
             }
           }

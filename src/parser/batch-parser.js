@@ -112,7 +112,7 @@ export async function parseBatchData(textareaValue, favorites, options = {}) {
     const silent = options.silent || false;
 
     if(!textareaValue || !(textareaValue.trim())) {
-      return { errors: ["no data"] };
+      return {};
     }
     const genericFormDataSerialized = $('form[action="/timelog"]').serializeArray();
     const projectData = {};
@@ -132,6 +132,15 @@ export async function parseBatchData(textareaValue, favorites, options = {}) {
       currentProjectData.push(projectData);
     }
     const errors = [];
+
+    // Helper to add structured errors
+    function addError(lineNum, message, severity = 'error') {
+      errors.push({
+        lineNumber: lineNum + 1, // Convert to 1-based
+        message,
+        severity, // 'error' | 'warning'
+      });
+    }
 
     const summarizedData = {
       labels: {},
@@ -156,13 +165,16 @@ export async function parseBatchData(textareaValue, favorites, options = {}) {
           const matches = labelFromLine.match(/^(\/|\\)?(.*?)(\/|\\)?$/);
           const hasSlash = matches[1] || matches[3];
           if (hasSlash) {
-            shouldPopProjectData = true;
             labelFromLine = matches[2];
           }
           const fav = favorites.find((f) => f.label === labelFromLine);
           if (fav) {
             if (fav.isInvalid) {
-              errors.push(`${lineNumber + 1}. sor: A(z) "<b>${fav.label}</b>" címke egy lezárt/nem létező kategóriára hivatkozik!`);
+              addError(lineNumber, `A(z) "${fav.label}" címke egy lezárt/nem létező kategóriára hivatkozik!`);
+            }
+            // Only set shouldPopProjectData if the favorite was found (and thus pushed)
+            if (hasSlash) {
+              shouldPopProjectData = true;
             }
             currentProjectData.push({
               label: fav.label,
@@ -170,6 +182,8 @@ export async function parseBatchData(textareaValue, favorites, options = {}) {
               todo_list_id: fav.todo_list_id.value,
               todo_item_id: fav.todo_item_id.value
             });
+          } else {
+            addError(lineNumber, `A(z) "${labelFromLine}" címke nem található a kedvencek között!`);
           }
         }
         return;
@@ -180,12 +194,11 @@ export async function parseBatchData(textareaValue, favorites, options = {}) {
         shouldPopProjectData = false;
       }
       let currentLabel = (localCurrentProjectData && localCurrentProjectData.label) || "";
-      console.log("initial current label", currentLabel);
 
       function parseDateStr(dateStr) {
         const momentizedDate = moment(dateStr, ['YYYY-MM-DD', 'MM-DD'], true);
         if (!momentizedDate.isValid()) {
-          errors.push(`${lineNumber + 1}. sor: hibás dátumformátum!`);
+          addError(lineNumber, `Hibás dátumformátum!`);
           return null;
         }
         return momentizedDate;
@@ -197,7 +210,7 @@ export async function parseBatchData(textareaValue, favorites, options = {}) {
       let parsedDate;
       if (dateStr === '-') {
         if (!localCurrentDate) {
-          errors.push(`${lineNumber + 1}. sor: dátum címke hiányzik!`);
+          addError(lineNumber, `Dátum címke hiányzik!`);
           return;
         }
         parsedDate = localCurrentDate;
@@ -317,7 +330,7 @@ export async function parseBatchData(textareaValue, favorites, options = {}) {
       }
 
       if (!localCurrentProjectData && !externallyFetchedProjectData) {
-        errors.push(`${lineNumber + 1}. sor: Kategória információ hiányzik`);
+        addError(lineNumber, `Kategória információ hiányzik`);
         return;
       }
 

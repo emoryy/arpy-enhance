@@ -39,19 +39,16 @@ export function showStatus(message, type = 'info', duration = 3000) {
 /**
  * Update status bar (from original codebase)
  */
-export function status(description, level) {
-  const statusElement = document.getElementById('status-description');
+export function status(description, level, { html = false } = {}) {
+  const statusElement = document.getElementById('status');
   if (!statusElement) return;
 
-  statusElement.innerText = description;
-
-  const statusBar = document.getElementById('status-bar');
-  if (!statusBar) return;
-
-  statusBar.className = '';
-  if (level) {
-    statusBar.classList.add(level);
+  if (html) {
+    statusElement.innerHTML = description;
+  } else {
+    statusElement.textContent = description;
   }
+  statusElement.className = level || '';
 }
 
 /**

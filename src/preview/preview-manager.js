@@ -8,7 +8,7 @@ import { settingsManager } from '../settings/settings-manager.js';
 import { favorites } from '../favorites/favorites-manager.js';
 import { monacoEditorInstance } from '../monaco/monaco-setup.js';
 import { reloadRedmineTicket } from '../redmine/redmine-cache.js';
-import { updateEditorDecorations } from '../monaco/monaco-decorations.js';
+import { updateEditorDecorations, setEditorMarkers } from '../monaco/monaco-decorations.js';
 
 /**
  * Update preview panel with parsed data
@@ -25,27 +25,40 @@ export async function updatePreview() {
     updateEditorDecorations(result.summarizedData);
   }
 
+  // Update Monaco editor markers (linting)
+  const hasErrors = result.errors && result.errors.length > 0;
+  if (hasErrors) {
+    setEditorMarkers(result.errors);
+  } else {
+    setEditorMarkers([]);
+  }
+
+  // Control submit button state based on errors
+  const submitButton = document.getElementById('submit-batch-button');
+  if (submitButton) {
+    if (hasErrors) {
+      submitButton.disabled = true;
+      submitButton.classList.add('btn-disabled');
+      submitButton.title = `${result.errors.length} hiba található - javítsd ki a hibákat a beküldés előtt`;
+    } else {
+      submitButton.disabled = false;
+      submitButton.classList.remove('btn-disabled');
+      submitButton.title = '';
+    }
+  }
+
   previewContent.innerHTML = "";
-  if (result.errors) {
+
+  // Show error summary if there are errors
+  if (hasErrors) {
     const errorWrapper = document.createElement("div");
     errorWrapper.className = "preview-errors-wrapper";
-
-    const errorTitle = document.createElement("div");
-    errorTitle.className = "preview-errors-title";
-    errorTitle.textContent = "Hibák az elemzés során:";
-    errorWrapper.appendChild(errorTitle);
-
-    const list = document.createElement("ul");
-    list.className = "preview-errors-list";
-    errorWrapper.appendChild(list);
-
-    result.errors.forEach((error) => {
-      const errorItem = document.createElement("li");
-      errorItem.className = "preview-error-item";
-      errorItem.innerHTML = error;
-      list.appendChild(errorItem);
-    });
-
+    errorWrapper.innerHTML = `
+      <div class="preview-errors-summary">
+        <span class="preview-errors-icon">⚠</span>
+        <span class="preview-errors-text">${result.errors.length} hiba található a szövegben. Javítsd ki a hibákat a beküldés előtt!</span>
+      </div>
+    `;
     previewContent.appendChild(errorWrapper);
   }
   if (!result.summarizedData) {
