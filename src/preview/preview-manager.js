@@ -10,13 +10,68 @@ import { monacoEditorInstance } from '../monaco/monaco-setup.js';
 import { reloadRedmineTicket } from '../redmine/redmine-cache.js';
 import { updateEditorDecorations, setEditorMarkers } from '../monaco/monaco-decorations.js';
 
+let savedScrollTop = 0;
+let scrollListenerAttached = false;
+let programmaticUpdateCount = 0;
+
+function ensureScrollListener(previewContent) {
+  if (scrollListenerAttached) return;
+  scrollListenerAttached = true;
+  previewContent.addEventListener('scroll', () => {
+    if (programmaticUpdateCount === 0) {
+      savedScrollTop = previewContent.scrollTop;
+    }
+  });
+}
+
 /**
  * Update preview panel with parsed data
  */
 export async function updatePreview() {
   const savedActiveTab = localStorage.getItem('arpyEnhanceActiveTab') || 'dates';
   const previewContent = document.getElementById("preview-content");
-  const prevScrollTop = previewContent.scrollTop;
+  ensureScrollListener(previewContent);
+  programmaticUpdateCount++;
+  try {
+    return await updatePreviewInner(previewContent, savedActiveTab);
+  } catch (e) {
+    // Without this the preview would keep showing the stale loading indicator forever,
+    // with no hint that anything went wrong.
+    console.error('Preview update failed:', e);
+    renderPreviewCrash(previewContent, e);
+  } finally {
+    requestAnimationFrame(() => {
+      previewContent.scrollTop = savedScrollTop;
+      requestAnimationFrame(() => {
+        programmaticUpdateCount--;
+      });
+    });
+  }
+}
+
+function renderPreviewCrash(previewContent, error) {
+  previewContent.innerHTML = '';
+  const wrapper = document.createElement('div');
+  wrapper.className = 'preview-errors-wrapper';
+  const title = document.createElement('div');
+  title.className = 'preview-errors-title';
+  title.textContent = '⚠ Az előnézet elkészítése hibába ütközött';
+  const detail = document.createElement('pre');
+  detail.className = 'preview-crash-detail';
+  detail.textContent = (error && (error.stack || error.message)) || String(error);
+  wrapper.appendChild(title);
+  wrapper.appendChild(detail);
+  previewContent.appendChild(wrapper);
+
+  const submitButton = document.getElementById('submit-batch-button');
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.classList.add('btn-disabled');
+    submitButton.title = 'Az előnézet hibába ütközött - beküldés letiltva';
+  }
+}
+
+async function updatePreviewInner(previewContent, savedActiveTab) {
   const editorValue = monacoEditorInstance ? monacoEditorInstance.getValue() : document.getElementById('batch-textarea').value;
   const result = await parseBatchData(editorValue, favorites);
 
@@ -25,13 +80,31 @@ export async function updatePreview() {
     updateEditorDecorations(result.summarizedData);
   }
 
-  // Update Monaco editor markers (linting)
-  const hasErrors = result.errors && result.errors.length > 0;
-  if (hasErrors) {
-    setEditorMarkers(result.errors);
-  } else {
-    setEditorMarkers([]);
+  // Collect unlabeled entries for marker/error reporting (skip lines that already have a parser error)
+  const parserErrorLines = new Set((result.errors || []).map((e) => e.lineNumber));
+  const unlabeledMarkers = [];
+  if (result.summarizedData?.dates) {
+    const seenLines = new Set();
+    Object.values(result.summarizedData.dates).forEach((day) => {
+      day.entries.forEach((entry) => {
+        if (entry.isUnlabeled && entry.lineNumber && !seenLines.has(entry.lineNumber) && !parserErrorLines.has(entry.lineNumber)) {
+          seenLines.add(entry.lineNumber);
+          unlabeledMarkers.push({
+            lineNumber: entry.lineNumber,
+            message: 'Hiányzó kategória címke - add hozzá explicit címkével vagy állítsd be a Redmine ticket "Arpy jelentés" mezőjét',
+            severity: 'error',
+          });
+        }
+      });
+    });
   }
+
+  // Update Monaco editor markers (linting)
+  const parserErrorCount = result.errors ? result.errors.length : 0;
+  const totalErrorCount = parserErrorCount + unlabeledMarkers.length;
+  const hasErrors = totalErrorCount > 0;
+  const allMarkers = [...(result.errors || []), ...unlabeledMarkers];
+  setEditorMarkers(allMarkers);
 
   // Control submit button state based on errors
   const submitButton = document.getElementById('submit-batch-button');
@@ -39,7 +112,7 @@ export async function updatePreview() {
     if (hasErrors) {
       submitButton.disabled = true;
       submitButton.classList.add('btn-disabled');
-      submitButton.title = `${result.errors.length} hiba található - javítsd ki a hibákat a beküldés előtt`;
+      submitButton.title = `${totalErrorCount} hiba található - javítsd ki a hibákat a beküldés előtt`;
     } else {
       submitButton.disabled = false;
       submitButton.classList.remove('btn-disabled');
@@ -56,7 +129,7 @@ export async function updatePreview() {
     errorWrapper.innerHTML = `
       <div class="preview-errors-summary">
         <span class="preview-errors-icon">⚠</span>
-        <span class="preview-errors-text">${result.errors.length} hiba található a szövegben. Javítsd ki a hibákat a beküldés előtt!</span>
+        <span class="preview-errors-text">${totalErrorCount} hiba található a szövegben. Javítsd ki a hibákat a beküldés előtt!</span>
       </div>
     `;
     previewContent.appendChild(errorWrapper);
@@ -146,11 +219,15 @@ export async function updatePreview() {
       sumRow.classList.add("sum-row");
       table.appendChild(sumRow);
       const catTh = document.createElement("th");
-      catTh.innerHTML = key;
+      const groupIsUnlabeled = sumType === "labels" && value.entries[0].isUnlabeled;
+      catTh.innerHTML = groupIsUnlabeled ? '?' : key;
       if (value.entries[0].isAutomaticLabel) {
         catTh.classList.add("is-automatic-label");
       }
-      catTh.setAttribute("title", value.entries[0].label)
+      if (groupIsUnlabeled) {
+        sumRow.classList.add("is-unlabeled");
+      }
+      catTh.setAttribute("title", value.entries[0].label || '(címke nélkül)')
       sumRow.appendChild(catTh);
       const sumTh = document.createElement("th");
       sumTh.innerHTML = value.sum;
@@ -224,7 +301,10 @@ export async function updatePreview() {
         if (row.isAutomaticLabel) {
           tr.classList.add("is-automatic-label");
         }
-        tr.setAttribute("title", row.label);
+        if (row.isUnlabeled) {
+          tr.classList.add("is-unlabeled");
+        }
+        tr.setAttribute("title", row.label || '(címke nélkül)');
         Object.entries(row).forEach(([key, value]) => {
           if (![
             "time_entry[date]",
@@ -281,7 +361,8 @@ export async function updatePreview() {
               cell.innerHTML = value;
             }
           } else {
-            cell.innerHTML = `${row.label}${row.rmProjectName ? `(${row.rmProjectName})`: '' }`;
+            const labelText = row.isUnlabeled ? '?' : row.label;
+            cell.innerHTML = `${labelText}${row.rmProjectName ? `(${row.rmProjectName})`: '' }`;
           }
 
           tr.appendChild(cell);
@@ -300,6 +381,4 @@ export async function updatePreview() {
     }
 
   });
-
-  previewContent.scrollTop = prevScrollTop;
 }

@@ -7,6 +7,8 @@ import { MONACO_CSS_URL } from '../constants.js';
 import { updateMonacoLayout, setMonacoInstance } from './monaco-layout.js';
 import { getCurrentTheme, setMonacoEditorInstance } from '../theme/theme-manager.js';
 import { favorites, getFullLabelPartsForFav } from '../favorites/favorites-manager.js';
+import { getCachedRedmineIssue, fetchRedmineIssue } from '../redmine/redmine-cache.js';
+import { settingsManager } from '../settings/settings-manager.js';
 
 export let monacoEditorInstance = null;
 
@@ -38,7 +40,10 @@ function setupArpyLanguageAndTheme() {
         // Rule 2: Date Label lines (must be the only thing on the line)
         [/^\s*(\d{4}-\d{2}-\d{2}|\d{2}-\d{2})\s*$/, "date.label"],
 
-        // Rule 3: Category Label lines (must be the only thing on the line)
+        // Rule 3a: Scoped Category Label lines (wrapped in / or \, applies only to next entry)
+        [/^\s*([\/\\]\S+|\S+[\/\\])\s*$/, "category.label.scoped"],
+
+        // Rule 3b: Category Label lines (must be the only thing on the line)
         [/^\s*\S+\s*$/, "category.label"],
 
         // Rule 4: Work Hour Entry lines. Match the start and transition to a dedicated parser.
@@ -101,6 +106,11 @@ function setupArpyLanguageAndTheme() {
         foreground: "#9400D3",
         fontStyle: "bold",
       }, // Dark Violet
+      {
+        token: "category.label.scoped",
+        foreground: "#e8590c",
+        fontStyle: "bold",
+      },
       { token: "date.entry", foreground: "#008000", fontStyle: "bold" },
       { token: "delimiter", foreground: "#008000", fontStyle: "bold" },
       { token: "number", foreground: "#008fe2ff", fontStyle: "bold" },
@@ -159,6 +169,11 @@ function setupArpyLanguageAndTheme() {
       {
         token: "category.label",
         foreground: "#c586c0",
+        fontStyle: "bold",
+      },
+      {
+        token: "category.label.scoped",
+        foreground: "#ffa94d",
         fontStyle: "bold",
       },
       { token: "date.entry", foreground: "#4ec9b0", fontStyle: "bold" },
@@ -332,6 +347,14 @@ export function initializeMonacoEditor() {
 
       // 2. Create the editor directly with the final theme.
       const monacoTheme = getCurrentTheme() === 'dark' ? 'arpy-dark' : 'arpy-light-vibrant';
+
+      // Hovers and suggestions are placed above the first visible lines, where the
+      // editor's own wrapper (overflow:hidden) clips them away. Hosting them in a
+      // node on <body> escapes both that clipping and the fixed navbar's z-index.
+      // The monaco-editor class is required for the theme styles to apply here.
+      const overflowWidgetsNode = document.createElement('div');
+      overflowWidgetsNode.className = 'monaco-editor arpy-monaco-overflow-widgets';
+      document.body.appendChild(overflowWidgetsNode);
       const editor = monaco.editor.create(editorContainer, {
         value: originalTextarea.value,
         language: 'arpy-log',
@@ -343,6 +366,10 @@ export function initializeMonacoEditor() {
         wordBasedSuggestions: false,
         tabSize: 2,
         insertSpaces: true,
+        minimap: { showSlider: 'always' },
+        // Construction-time only: updateOptions() does not relocate the container.
+        fixedOverflowWidgets: true,
+        overflowWidgetsDomNode: overflowWidgetsNode,
       });
       const watcher = stretchSuggestWidgetContinuously(editor, { minWidth: 240, rightMargin: 8 });
 
@@ -363,6 +390,82 @@ export function initializeMonacoEditor() {
       monaco.languages.registerCompletionItemProvider('plaintext', {
         provideCompletionItems: () => {
           return { suggestions: [] };
+        }
+      });
+
+      monaco.languages.registerHoverProvider('arpy-log', {
+        provideHover: function(model, position) {
+          const lineContent = model.getLineContent(position.lineNumber);
+          const col = position.column;
+
+          // Category label line: single word on the line, not a date
+          const labelLineMatch = lineContent.match(/^(\s*)(\S+)\s*$/);
+          if (labelLineMatch && !/^(\d{4}-\d{2}-\d{2}|\d{2}-\d{2})$/.test(labelLineMatch[2])) {
+            const labelStartCol = labelLineMatch[1].length + 1;
+            const labelEndCol = labelStartCol + labelLineMatch[2].length;
+            if (col >= labelStartCol && col <= labelEndCol) {
+              const stripped = labelLineMatch[2].match(/^(\/|\\)?(.*?)(\/|\\)?$/)[2];
+              const matchingFavs = favorites.filter((f) => f.label === stripped);
+              if (matchingFavs.length > 0) {
+                const range = new monaco.Range(position.lineNumber, labelStartCol, position.lineNumber, labelEndCol);
+                const sections = matchingFavs.map((fav) => {
+                  const parts = getFullLabelPartsForFav(fav);
+                  const header = `**${fav.label}**${fav.isInvalid ? ' _(LEZÁRT)_' : ''}`;
+                  const path = parts.join(' / ');
+                  return `${header}\n\n${path}`;
+                });
+                return {
+                  range,
+                  contents: [{ value: sections.join('\n\n---\n\n'), isTrusted: true }],
+                };
+              }
+            }
+          }
+
+          const patterns = [
+            { regex: /#(\d+)/g, type: 'redmine' },
+            { regex: /\b([A-Z][A-Z0-9]*-\d+)\b/g, type: 'youtrack' },
+          ];
+
+          for (const { regex, type } of patterns) {
+            let match;
+            while ((match = regex.exec(lineContent)) !== null) {
+              const startCol = match.index + 1;
+              const endCol = startCol + match[0].length;
+              if (col < startCol || col > endCol) continue;
+
+              const range = new monaco.Range(position.lineNumber, startCol, position.lineNumber, endCol);
+
+              if (type === 'redmine') {
+                const issueNumber = match[1];
+                const url = `https://redmine.dbx.hu/issues/${issueNumber}`;
+                const cached = getCachedRedmineIssue(issueNumber);
+                const lines = [`**[#${issueNumber}](${url})**`];
+                if (cached?.issue) {
+                  if (cached.issue.subject) lines.push(cached.issue.subject);
+                  if (cached.issue.project?.name) lines.push(`*${cached.issue.project.name}*`);
+                  const arpyField = cached.issue.custom_fields?.find(({ name }) => name === 'Arpy jelentés');
+                  if (arpyField?.value) lines.push(`Arpy: **${arpyField.value}**`);
+                } else if (settingsManager.get('redmineApiKey')) {
+                  lines.push('_(adatok betöltése folyamatban)_');
+                  fetchRedmineIssue(issueNumber).catch(() => {});
+                }
+                return {
+                  range,
+                  contents: [{ value: lines.join('\n\n'), isTrusted: true }],
+                };
+              }
+              if (type === 'youtrack') {
+                const ticketId = match[1];
+                const url = `https://youtrack.dbx.hu/issue/${ticketId}`;
+                return {
+                  range,
+                  contents: [{ value: `**[${ticketId}](${url})**`, isTrusted: true }],
+                };
+              }
+            }
+          }
+          return null;
         }
       });
 

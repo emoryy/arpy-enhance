@@ -176,11 +176,12 @@ export async function parseBatchData(textareaValue, favorites, options = {}) {
             if (hasSlash) {
               shouldPopProjectData = true;
             }
+            // A favorite may point at a project or a todo list only, without a todo item.
             currentProjectData.push({
               label: fav.label,
-              project_id: fav.project_id.value,
-              todo_list_id: fav.todo_list_id.value,
-              todo_item_id: fav.todo_item_id.value
+              project_id: fav.project_id?.value,
+              todo_list_id: fav.todo_list_id?.value,
+              todo_item_id: fav.todo_item_id?.value
             });
           } else {
             addError(lineNumber, `A(z) "${labelFromLine}" címke nem található a kedvencek között!`);
@@ -262,9 +263,9 @@ export async function parseBatchData(textareaValue, favorites, options = {}) {
                   console.log("no label for", arpyFieldValue);
                 }
                 externallyFetchedProjectData = {
-                  project_id: fav.project_id.value,
-                  todo_list_id: fav.todo_list_id.value,
-                  todo_item_id: fav.todo_item_id.value,
+                  project_id: fav.project_id?.value,
+                  todo_list_id: fav.todo_list_id?.value,
+                  todo_item_id: fav.todo_item_id?.value,
                   arpyField: arpyField.value
                 }
               } else {
@@ -329,9 +330,9 @@ export async function parseBatchData(textareaValue, favorites, options = {}) {
         }
       }
 
-      if (!localCurrentProjectData && !externallyFetchedProjectData) {
+      const hasProjectData = !!localCurrentProjectData || !!externallyFetchedProjectData;
+      if (!hasProjectData) {
         addError(lineNumber, `Kategória információ hiányzik`);
-        return;
       }
 
       const description = lineParts.join(' ').replace(/^- /,''); // ha az issue szám után kötőjel volt " - ", akkor ez kiszedi
@@ -355,6 +356,8 @@ export async function parseBatchData(textareaValue, favorites, options = {}) {
       if (!options.nometa) {
         outputDataObject.label = currentLabel;
         outputDataObject.isAutomaticLabel = !!externallyFetchedProjectData;
+        outputDataObject.isUnlabeled = !currentLabel;
+        outputDataObject.lineNumber = lineNumber + 1;
         outputDataObject.arpyField = externallyFetchedProjectData?.arpyField;
         outputDataObject.rmProjectName = rmProjectName;
       }
@@ -392,10 +395,6 @@ export async function parseBatchData(textareaValue, favorites, options = {}) {
 
     console.log("READY");
 
-    if (errors.length) {
-      return { errors };
-    }
-
     // dátum alapján csoportosított adatok sorbarendezése
     summarizedData.dates = Object.entries(summarizedData.dates).sort((a, b) => {
       if (a[0] < b[0]) {
@@ -421,5 +420,5 @@ export async function parseBatchData(textareaValue, favorites, options = {}) {
       });
     });
 
-    return { data: parsedBatchData, summarizedData };
+    return { data: parsedBatchData, summarizedData, errors: errors.length ? errors : undefined };
   }

@@ -869,8 +869,9 @@ function addToFavorites(itemElement) {
     const todoListElement = document.querySelector(`#advanced-selector-categories .advanced-selector-item.selected`);
     const todoListLabel = todoListElement ? todoListElement.dataset.label : '';
 
-    // Add all selected items if multi-select is active
-    const itemsToAdd = selectedTodoItemIds.size > 0 ? Array.from(selectedTodoItemIds) : [id];
+    // Batch-add the whole multi-selection only when the clicked + belongs to a selected
+    // item; otherwise add just the row whose + was clicked (matches the − button behavior).
+    const itemsToAdd = selectedTodoItemIds.has(id) ? Array.from(selectedTodoItemIds) : [id];
 
     itemsToAdd.forEach(itemId => {
       const itemEl = document.querySelector(`#advanced-selector-items .advanced-selector-item[data-id="${itemId}"]`);

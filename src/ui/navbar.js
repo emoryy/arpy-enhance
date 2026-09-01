@@ -77,4 +77,34 @@ export function injectNavbar() {
       toggleTheme();
     }
   });
+
+  syncBodyPaddingToNavbar();
+}
+
+/**
+ * Keep the space reserved below the fixed navbar equal to its rendered height.
+ *
+ * The width at which the navbar wraps to a second line depends on how wide its
+ * contents render, so it shifts with the logged-in user's name length, the zoom
+ * level and font loading (measured: ~1159px for a short name vs ~1280px for a
+ * long one). A media query breakpoint is right for one account and wrong for
+ * the next, and guessing too low lets the fixed navbar cover the page content.
+ */
+function syncBodyPaddingToNavbar() {
+  const navbar = document.querySelector('.navbar-fixed-top');
+  if (!navbar) {
+    return;
+  }
+
+  const sync = () => {
+    document.body.style.paddingTop = `${navbar.offsetHeight}px`;
+  };
+
+  sync();
+
+  if (typeof ResizeObserver === 'function') {
+    new ResizeObserver(sync).observe(navbar);
+  } else {
+    window.addEventListener('resize', sync);
+  }
 }

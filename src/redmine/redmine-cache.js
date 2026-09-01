@@ -57,6 +57,19 @@ export function isRedmineCacheExpired(issueNumber) {
 }
 
 /**
+ * Get cached Redmine issue data without triggering a fetch
+ */
+export function getCachedRedmineIssue(issueNumber) {
+  if (!issueNumber || !issueNumber.match || !issueNumber.match(/^\d+$/)) {
+    return null;
+  }
+  if (redmineCache[issueNumber] && !isRedmineCacheExpired(issueNumber)) {
+    return redmineCache[issueNumber].data;
+  }
+  return null;
+}
+
+/**
  * Fetch Redmine issue data with cache management
  */
 export async function fetchRedmineIssue(issueNumber, forceReload = false) {
