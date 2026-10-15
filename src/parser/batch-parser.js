@@ -8,6 +8,7 @@ import { fetchRedmineIssue } from '../redmine/redmine-cache.js';
 import { settingsManager } from '../settings/settings-manager.js';
 import { getFullLabelPartsForFav } from '../favorites/favorites-manager.js';
 import { fetchAndCache } from '../cache/arpy-cache.js';
+import { REVIEWED_MARKER_RE } from '../constants.js';
 
 // Async progress tracking
 let asyncStatus = {
@@ -80,6 +81,16 @@ function updateAsyncProgress(type, status, generation, silent = false) {
 }
 
 /**
+ * Texts of the options selected in the timelog form's project / todo list / todo item dropdowns
+ * @returns {string[]}
+ */
+function getSelectedDropdownPath() {
+  return ['project_id', 'todo_list_id', 'todo_item_id']
+    .map((name) => document.querySelector(`form[action="/timelog"] select[name="${name}"]`)?.selectedOptions[0]?.textContent.trim())
+    .filter(Boolean);
+}
+
+/**
  * Find todo data by full label string (from Redmine "Arpy jelentés" field)
  * @param {string} _fullLabelString - Full label string to search for
  * @param {Array} favorites - Favorites array to search in
@@ -129,7 +140,8 @@ export async function parseBatchData(textareaValue, favorites, options = {}) {
     let currentProjectData = [];
     let shouldPopProjectData = false;
     if (Object.keys(projectData).length === 3) {
-      currentProjectData.push(projectData);
+      // Entries before the first category label get the dropdowns' selection (documented behavior)
+      currentProjectData.push({ ...projectData, isFromDropdown: true, dropdownPath: getSelectedDropdownPath() });
     }
     const errors = [];
 
@@ -146,6 +158,7 @@ export async function parseBatchData(textareaValue, favorites, options = {}) {
       labels: {},
       dates: {}
     }
+    const reviewedDates = new Set();
     // Split by newlines to preserve actual line numbers (including empty lines)
     const lines = textareaValue.split(/\r?\n/);
     const parsedBatchData = (await Promise.all(lines.map(async function(line, lineNumber) {
@@ -154,6 +167,15 @@ export async function parseBatchData(textareaValue, favorites, options = {}) {
         return;
       }
       const lineParts = trimmedLine.replace(/\s\s+/g, ' ').split(' ');
+
+      if (lineParts.length === 2 && REVIEWED_MARKER_RE.test(lineParts[1])) {
+        const reviewedDate = moment(lineParts[0], ['YYYY-MM-DD', 'MM-DD'], true);
+        if (reviewedDate.isValid()) {
+          currentDate = reviewedDate;
+          reviewedDates.add(reviewedDate.format('YYYY-MM-DD'));
+          return;
+        }
+      }
 
       if (lineParts.length === 1) {
         const maybeDate = moment(lineParts[0], ['YYYY-MM-DD', 'MM-DD'], true);
@@ -258,10 +280,9 @@ export async function parseBatchData(textareaValue, favorites, options = {}) {
                 const fav = findTodoDataByFullLabelString(arpyFieldValue, favorites);
               if (fav) {
                 console.log("FOUND FAV FOR", arpyField.value, fav);
-                currentLabel = fav.label;
-                if (!fav.label) {
-                  console.log("no label for", arpyFieldValue);
-                }
+                // An unlabeled favorite must not make the entry "unlabeled": fall back to
+                // the field value, the same as a match found via the dropdowns.
+                currentLabel = fav.label || arpyField.value;
                 externallyFetchedProjectData = {
                   project_id: fav.project_id?.value,
                   todo_list_id: fav.todo_list_id?.value,
@@ -332,7 +353,7 @@ export async function parseBatchData(textareaValue, favorites, options = {}) {
 
       const hasProjectData = !!localCurrentProjectData || !!externallyFetchedProjectData;
       if (!hasProjectData) {
-        addError(lineNumber, `Kategória információ hiányzik`);
+        addError(lineNumber, `Nincs kategória: írj a sor elé egy kategória címkét, vagy válassz projektet, todo listát és todo elemet a lenyílókban (🔍)`);
       }
 
       const description = lineParts.join(' ').replace(/^- /,''); // ha az issue szám után kötőjel volt " - ", akkor ez kiszedi
@@ -356,7 +377,10 @@ export async function parseBatchData(textareaValue, favorites, options = {}) {
       if (!options.nometa) {
         outputDataObject.label = currentLabel;
         outputDataObject.isAutomaticLabel = !!externallyFetchedProjectData;
-        outputDataObject.isUnlabeled = !currentLabel;
+        const isFromDropdown = !externallyFetchedProjectData && !!localCurrentProjectData?.isFromDropdown;
+        outputDataObject.isFromDropdown = isFromDropdown;
+        outputDataObject.dropdownPath = isFromDropdown ? localCurrentProjectData.dropdownPath : undefined;
+        outputDataObject.isUnlabeled = !currentLabel && !isFromDropdown;
         outputDataObject.lineNumber = lineNumber + 1;
         outputDataObject.arpyField = externallyFetchedProjectData?.arpyField;
         outputDataObject.rmProjectName = rmProjectName;
@@ -394,6 +418,10 @@ export async function parseBatchData(textareaValue, favorites, options = {}) {
     }))).filter((item) => !!item);
 
     console.log("READY");
+
+    Object.entries(summarizedData.dates).forEach(([date, byDate]) => {
+      byDate.reviewed = reviewedDates.has(date);
+    });
 
     // dátum alapján csoportosított adatok sorbarendezése
     summarizedData.dates = Object.entries(summarizedData.dates).sort((a, b) => {

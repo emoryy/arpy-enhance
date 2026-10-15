@@ -39,6 +39,9 @@ export function createBatchSubmitButton() {
  * Create favorite add button
  */
 export function createFavoriteAddButton() {
+  $("#project_id").before(
+    '<button class="btn btn-primary btn-sm" type="button" id="pick-category-button" title="Projekt / todo lista / todo kiválasztása keresővel">🔍</button>'
+  );
   $("#todo_item_id").after(
     '<button class="btn btn-primary btn-sm" type="button" id="add-fav-button"><span class="i">★</span> Fav</button>'
   );
@@ -159,6 +162,13 @@ export function createFavoritesContainer() {
           <button id="clear-invalid-favs-button" type="button" class="btn btn-mini btn-danger" title="Az összes lezárt / nem létező kategóriára hivatkozó (pirossal jelölt) kedvenc törlése." style="display: none;">
             ✖
           </button>
+          <button id="export-favs-button" type="button" class="btn btn-mini" title="Kedvencek mentése JSON fájlba">
+            Export
+          </button>
+          <button id="import-favs-button" type="button" class="btn btn-mini" title="Kedvencek betöltése JSON fájlból. A meglévőkkel összefésüli: létező címkét nem ír felül, ütköző címkét kihagy.">
+            Import
+          </button>
+          <input id="import-favs-input" type="file" accept=".json,application/json" style="display: none;">
           <input class="quick-filter-input" placeholder="Gyorsszűrés">
           <button id="maximize-button" type="button" class="btn btn-mini" data-sort="label" style="font-size: 16px;" title="Teljes magasság">
             ⬍
@@ -175,27 +185,45 @@ export function createFavoritesContainer() {
           type="text"
           id="advanced-selector-search"
           class="advanced-selector-search-input"
-          placeholder="Fuzzy keresés: első szó ⯈ projekt, második szó ⯈ todo lista, harmadik szó ⯈ todo elem (pl: &quot;ham ált fejl&quot;)"
+          placeholder="Keresés szavanként, pl. ham ált fejl"
           autocomplete="off"
         />
       </div>
       <div class="advanced-selector-content">
         <div class="advanced-selector-section">
-          <div class="advanced-selector-section-title">Projektek</div>
+          <div class="advanced-selector-section-title">
+            <span class="advanced-selector-step">1</span>
+            <span>Projektek</span>
+            <span class="advanced-selector-step-hint">1. szó szűri</span>
+          </div>
           <div id="advanced-selector-projects" class="advanced-selector-list"></div>
         </div>
         <div class="advanced-selector-section">
-          <div class="advanced-selector-section-title">TODO Listák</div>
+          <div class="advanced-selector-section-title">
+            <span class="advanced-selector-step">2</span>
+            <span>Todo listák</span>
+            <span class="advanced-selector-step-hint">2. szó szűri</span>
+          </div>
           <div id="advanced-selector-categories" class="advanced-selector-list">
-            <div class="advanced-selector-info">2. szó szűri ezt a listát</div>
+            <div class="advanced-selector-info">Válassz projektet</div>
           </div>
         </div>
         <div class="advanced-selector-section">
-          <div class="advanced-selector-section-title">TODO elemek</div>
+          <div class="advanced-selector-section-title">
+            <span class="advanced-selector-step">3</span>
+            <span>Todo elemek</span>
+            <span class="advanced-selector-step-hint">3. szó szűri</span>
+          </div>
           <div id="advanced-selector-items" class="advanced-selector-list">
-            <div class="advanced-selector-info">3. szó szűri ezt a listát<br>↑↓ navigáció, Enter hozzáadás</div>
+            <div class="advanced-selector-info">Válassz todo listát</div>
           </div>
         </div>
+      </div>
+      <div class="advanced-selector-footer">
+        <span id="advanced-selector-mode-label" class="advanced-selector-mode-label">Kedvencek kezelése</span>
+        <span><kbd>↑</kbd> <kbd>↓</kbd> navigáció</span>
+        <span><kbd>Enter</kbd> <span id="advanced-selector-enter-action">hozzáadás / eltávolítás</span></span>
+        <span><kbd>Esc</kbd> bezárás</span>
       </div>
     </div>
   </div>`);

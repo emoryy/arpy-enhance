@@ -24,6 +24,14 @@ function ensureScrollListener(previewContent) {
   });
 }
 
+function getDropdownShortName(entry) {
+  return entry.dropdownPath?.[entry.dropdownPath.length - 1] || '(lenyíló)';
+}
+
+function getDropdownTitle(entry) {
+  return `Címke nélkül, a lenyílókban kiválasztott kategória: ${entry.dropdownPath?.join(' / ') || '?'}`;
+}
+
 /**
  * Update preview panel with parsed data
  */
@@ -47,6 +55,40 @@ export async function updatePreview() {
       });
     });
   }
+}
+
+const MAX_LISTED_ERRORS = 10;
+
+function renderErrorList(markers) {
+  const list = document.createElement('ul');
+  list.className = 'preview-errors-list';
+  const sorted = [...markers].sort((a, b) => a.lineNumber - b.lineNumber);
+  sorted.slice(0, MAX_LISTED_ERRORS).forEach((marker) => {
+    const item = document.createElement('li');
+    item.className = 'preview-error-item';
+    item.title = 'Ugrás a sorra a szerkesztőben';
+    const line = document.createElement('b');
+    line.textContent = `${marker.lineNumber}. sor:`;
+    item.append(line, ` ${marker.message}`);
+    item.addEventListener('click', () => revealEditorLine(marker.lineNumber));
+    list.appendChild(item);
+  });
+  if (sorted.length > MAX_LISTED_ERRORS) {
+    const more = document.createElement('li');
+    more.className = 'preview-error-item preview-error-more';
+    more.textContent = `+${sorted.length - MAX_LISTED_ERRORS} további hiba (a szerkesztőben aláhúzva)`;
+    list.appendChild(more);
+  }
+  return list;
+}
+
+function revealEditorLine(lineNumber) {
+  if (!monacoEditorInstance) {
+    return;
+  }
+  monacoEditorInstance.revealLineInCenter(lineNumber);
+  monacoEditorInstance.setPosition({ lineNumber, column: 1 });
+  monacoEditorInstance.focus();
 }
 
 function renderPreviewCrash(previewContent, error) {
@@ -132,6 +174,7 @@ async function updatePreviewInner(previewContent, savedActiveTab) {
         <span class="preview-errors-text">${totalErrorCount} hiba található a szövegben. Javítsd ki a hibákat a beküldés előtt!</span>
       </div>
     `;
+    errorWrapper.appendChild(renderErrorList(allMarkers));
     previewContent.appendChild(errorWrapper);
   }
   if (!result.summarizedData) {
@@ -220,6 +263,7 @@ async function updatePreviewInner(previewContent, savedActiveTab) {
       table.appendChild(sumRow);
       const catTh = document.createElement("th");
       const groupIsUnlabeled = sumType === "labels" && value.entries[0].isUnlabeled;
+      const groupIsFromDropdown = sumType === "labels" && value.entries[0].isFromDropdown;
       catTh.innerHTML = groupIsUnlabeled ? '?' : key;
       if (value.entries[0].isAutomaticLabel) {
         catTh.classList.add("is-automatic-label");
@@ -228,6 +272,16 @@ async function updatePreviewInner(previewContent, savedActiveTab) {
         sumRow.classList.add("is-unlabeled");
       }
       catTh.setAttribute("title", value.entries[0].label || '(címke nélkül)')
+      if (groupIsFromDropdown) {
+        sumRow.classList.add("is-from-dropdown");
+        catTh.textContent = getDropdownShortName(value.entries[0]);
+        catTh.setAttribute("title", getDropdownTitle(value.entries[0]));
+      }
+      if (sumType === "dates" && value.reviewed && settings.showReviewedDays) {
+        sumRow.classList.add("is-reviewed");
+        catTh.innerHTML = `${key} ✓`;
+        catTh.setAttribute("title", "Átnézve");
+      }
       sumRow.appendChild(catTh);
       const sumTh = document.createElement("th");
       sumTh.innerHTML = value.sum;
@@ -304,7 +358,10 @@ async function updatePreviewInner(previewContent, savedActiveTab) {
         if (row.isUnlabeled) {
           tr.classList.add("is-unlabeled");
         }
-        tr.setAttribute("title", row.label || '(címke nélkül)');
+        if (row.isFromDropdown) {
+          tr.classList.add("is-from-dropdown");
+        }
+        tr.setAttribute("title", row.isFromDropdown ? getDropdownTitle(row) : (row.label || '(címke nélkül)'));
         Object.entries(row).forEach(([key, value]) => {
           if (![
             "time_entry[date]",
@@ -361,8 +418,12 @@ async function updatePreviewInner(previewContent, savedActiveTab) {
               cell.innerHTML = value;
             }
           } else {
-            const labelText = row.isUnlabeled ? '?' : row.label;
-            cell.innerHTML = `${labelText}${row.rmProjectName ? `(${row.rmProjectName})`: '' }`;
+            if (row.isFromDropdown) {
+              cell.textContent = `${getDropdownShortName(row)}${row.rmProjectName ? `(${row.rmProjectName})`: '' }`;
+            } else {
+              const labelText = row.isUnlabeled ? '?' : row.label;
+              cell.innerHTML = `${labelText}${row.rmProjectName ? `(${row.rmProjectName})`: '' }`;
+            }
           }
 
           tr.appendChild(cell);

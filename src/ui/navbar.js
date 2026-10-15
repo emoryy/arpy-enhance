@@ -9,6 +9,7 @@ import logoUrl from '../assets/logo.png';
 let getCurrentTheme = null;
 let toggleTheme = null;
 let showSettingsModal = null;
+let showChangelogModal = null;
 
 /**
  * Initialize navbar module with dependencies
@@ -17,6 +18,7 @@ export function initNavbarModule(deps) {
   getCurrentTheme = deps.getCurrentTheme;
   toggleTheme = deps.toggleTheme;
   showSettingsModal = deps.showSettingsModal;
+  showChangelogModal = deps.showChangelogModal;
 }
 
 /**
@@ -44,6 +46,13 @@ export function injectNavbar() {
         <span>Beállítások</span>
       </a>
     </li>
+    <li>
+      <a href="#" id="changelog-button" class="arpy-enhance-settings-btn" title="Változások az egyes verziókban">
+        <span class="settings-icon">✦</span>
+        <span>Újdonságok</span>
+        <span class="changelog-unseen-dot" aria-label="Új verzió"></span>
+      </a>
+    </li>
     <li class="theme-toggle-container">
       <label class="theme-toggle-switch">
         <input type="checkbox" id="theme-toggle-checkbox" ${currentTheme === 'dark' ? 'checked' : ''}>
@@ -68,6 +77,13 @@ export function injectNavbar() {
     e.preventDefault();
     if (showSettingsModal) {
       showSettingsModal();
+    }
+  });
+
+  document.getElementById('changelog-button').addEventListener('click', (e) => {
+    e.preventDefault();
+    if (showChangelogModal) {
+      showChangelogModal();
     }
   });
 

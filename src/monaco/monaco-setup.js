@@ -9,6 +9,7 @@ import { getCurrentTheme, setMonacoEditorInstance } from '../theme/theme-manager
 import { favorites, getFullLabelPartsForFav } from '../favorites/favorites-manager.js';
 import { getCachedRedmineIssue, fetchRedmineIssue } from '../redmine/redmine-cache.js';
 import { settingsManager } from '../settings/settings-manager.js';
+import { registerReviewedCodeLens, updateReviewedDecorations } from './reviewed-days.js';
 
 export let monacoEditorInstance = null;
 
@@ -37,7 +38,10 @@ function setupArpyLanguageAndTheme() {
         // Rule 1: Comment lines
         [/^\s*#.*$/, "comment"],
 
-        // Rule 2: Date Label lines (must be the only thing on the line)
+        // Rule 2a: Date Label line with the reviewed-day marker ("07-01 ✓", "07-01 ok")
+        [/^(\s*)(\d{4}-\d{2}-\d{2}|\d{2}-\d{2})(\s+)(✓|✔|[oO][kK])(\s*)$/, ["", "date.label", "", "date.reviewed", ""]],
+
+        // Rule 2b: Date Label lines (must be the only thing on the line)
         [/^\s*(\d{4}-\d{2}-\d{2}|\d{2}-\d{2})\s*$/, "date.label"],
 
         // Rule 3a: Scoped Category Label lines (wrapped in / or \, applies only to next entry)
@@ -101,6 +105,7 @@ function setupArpyLanguageAndTheme() {
         fontStyle: "italic"
       }, // Vibrant Green
       { token: "date.label", foreground: "#008000", fontStyle: "bold" }, // Bright Blue
+      { token: "date.reviewed", foreground: "#1a7f37", fontStyle: "bold" },
       {
         token: "category.label",
         foreground: "#9400D3",
@@ -166,6 +171,7 @@ function setupArpyLanguageAndTheme() {
         fontStyle: "italic"
       },
       { token: "date.label", foreground: "#4ec9b0", fontStyle: "bold" },
+      { token: "date.reviewed", foreground: "#4ade80", fontStyle: "bold" },
       {
         token: "category.label",
         foreground: "#c586c0",
@@ -348,13 +354,6 @@ export function initializeMonacoEditor() {
       // 2. Create the editor directly with the final theme.
       const monacoTheme = getCurrentTheme() === 'dark' ? 'arpy-dark' : 'arpy-light-vibrant';
 
-      // Hovers and suggestions are placed above the first visible lines, where the
-      // editor's own wrapper (overflow:hidden) clips them away. Hosting them in a
-      // node on <body> escapes both that clipping and the fixed navbar's z-index.
-      // The monaco-editor class is required for the theme styles to apply here.
-      const overflowWidgetsNode = document.createElement('div');
-      overflowWidgetsNode.className = 'monaco-editor arpy-monaco-overflow-widgets';
-      document.body.appendChild(overflowWidgetsNode);
       const editor = monaco.editor.create(editorContainer, {
         value: originalTextarea.value,
         language: 'arpy-log',
@@ -367,9 +366,12 @@ export function initializeMonacoEditor() {
         tabSize: 2,
         insertSpaces: true,
         minimap: { showSlider: 'always' },
-        // Construction-time only: updateOptions() does not relocate the container.
+        codeLensFontSize: 13,
+        // Hovers and suggestions opening above the first visible lines would be
+        // clipped by the editor wrapper (overflow:hidden); position:fixed escapes it.
+        // Not combined with overflowWidgetsDomNode: in Monaco 0.49 a hover hosted
+        // outside the editor DOM closes as soon as the mouse moves onto it.
         fixedOverflowWidgets: true,
-        overflowWidgetsDomNode: overflowWidgetsNode,
       });
       const watcher = stretchSuggestWidgetContinuously(editor, { minWidth: 240, rightMargin: 8 });
 
@@ -377,6 +379,8 @@ export function initializeMonacoEditor() {
       monacoEditorInstance = editor;
       setMonacoInstance(editor);
       setMonacoEditorInstance(editor);
+      registerReviewedCodeLens(editor);
+      updateReviewedDecorations(editor);
 
       // Manual layout on explicit events only
       let resizeRAF;
@@ -518,6 +522,7 @@ export function initializeMonacoEditor() {
       editor.onDidChangeModelContent(() => {
         const currentValue = editor.getValue();
         originalTextarea.value = currentValue;
+        updateReviewedDecorations(editor);
 
         unsafeWindow.localStorage.batchTextareaSavedValue = currentValue;
         if (unsafeWindow.inputTimeout) {

@@ -27,6 +27,7 @@ import {
   renderFavs,
   setupFavoriteSorting,
   setupClearInvalidButton,
+  setupFavoritesImportExport,
   updateClearButtonVisibility,
   initFavoritesManager,
   addNewFavorite
@@ -39,6 +40,7 @@ import { injectNavbar, initNavbarModule } from './ui/navbar.js';
 import { createSettingsModal, showSettingsModal, initSettingsModalModule } from './ui/settings-modal.js';
 import { createHelpModal, setupHelpModalButton, getHelpText } from './ui/help-modal.js';
 import { initializeDOMStructure } from './ui/dom-setup.js';
+import { initChangelog, showChangelogModal } from './ui/changelog.js';
 import { initializePanels, initPanelManager } from './ui/panel-manager.js';
 
 // Import Monaco editor
@@ -112,6 +114,7 @@ import { copyTextToClipboard, status } from './utils/dom-helpers.js';
   loadFavorites();
   setupFavoriteSorting();
   setupClearInvalidButton();
+  setupFavoritesImportExport();
   setupQuickFilter();
 
   // === Initialize Advanced Selector ===
@@ -136,7 +139,8 @@ import { copyTextToClipboard, status } from './utils/dom-helpers.js';
   initNavbarModule({
     getCurrentTheme,
     toggleTheme,
-    showSettingsModal
+    showSettingsModal,
+    showChangelogModal
   });
   injectNavbar();
 
@@ -147,6 +151,9 @@ import { copyTextToClipboard, status } from './utils/dom-helpers.js';
     updateMonacoLayout
   });
   createSettingsModal();
+
+  // === Initialize Changelog (modal, update notice) ===
+  initChangelog();
 
   // === Initialize Help Modal ===
   createHelpModal();
@@ -176,6 +183,11 @@ import { copyTextToClipboard, status } from './utils/dom-helpers.js';
     document.getElementById('batch-textarea').value = window.localStorage.batchTextareaSavedValue;
     updatePreview();
   }
+
+  // Unlabeled entries take the dropdowns' selection, so the preview must follow it
+  $('form[action="/timelog"]').on('change', 'select[name="project_id"], select[name="todo_list_id"], select[name="todo_item_id"]', () => {
+    updatePreview();
+  });
 
   // === Add favorite button handler ===
   $("#add-fav-button").button().on("click", addNewFavorite);

@@ -627,6 +627,9 @@
             font-size: 13px;
           }
         }
+        .sum-row.is-reviewed th:first-child {
+          max-width: none;
+        }
         .is-unlabeled td:first-child,
         .sum-row.is-unlabeled th:first-child {
           position: relative;
@@ -642,6 +645,11 @@
             font-weight: bold;
             color: var(--unlabeled-icon);
           }
+        }
+        .is-from-dropdown td:first-child,
+        .sum-row.is-from-dropdown th:first-child {
+          font-style: italic;
+          text-overflow: ellipsis;
         }
         tr td:first-child,
         th {
@@ -769,10 +777,29 @@
           overflow-x: auto;
         }
 
+        .preview-errors-summary + .preview-errors-list {
+          margin-top: 12px;
+        }
+
         .preview-error-item {
           padding: 8px 0;
           color: var(--text-primary);
           border-bottom: 1px solid var(--status-error-border);
+          font-size: 14px;
+          cursor: pointer;
+
+          &:hover {
+            text-decoration: underline;
+          }
+
+          &.preview-error-more {
+            cursor: default;
+            color: var(--text-secondary);
+
+            &:hover {
+              text-decoration: none;
+            }
+          }
 
           &:last-child {
             border-bottom: none;
@@ -854,6 +881,20 @@
       vertical-align: middle;
       margin-bottom: 10px;
       margin-left: 10px;
+    }
+    #pick-category-button {
+      vertical-align: middle;
+      margin-bottom: 10px;
+      margin-right: 4px;
+      padding-left: 9px;
+      padding-right: 9px;
+      font-size: 16px;
+    }
+    /* Pick button + 3 selects + Fav button stay on one line in a half-width editor panel */
+    #project_id,
+    #todo_list_id,
+    #todo_item_id {
+      max-width: calc((100% - 140px) / 3);
     }
     .i {
       font-size: 16px;
@@ -951,6 +992,17 @@
     [data-theme="dark"] .date-decoration.okay {
       color: #4ade80 !important;
       opacity: 0.8;
+    }
+
+    /* Reviewed days ("07-01 ✓"): entries greyed out, green bar in the gutter */
+    .arpy-reviewed-day {
+      opacity: 0.4;
+    }
+
+    .arpy-reviewed-gutter {
+      background-color: #2da44e;
+      width: 4px !important;
+      margin-left: 4px;
     }
 
     .missing-entry-error {
@@ -1123,6 +1175,172 @@
       }
     }
 
+    /* Changelog modal */
+    #changelogModal {
+      top: 8%;
+      margin-left: -400px;
+      margin-top: 0;
+      width: 800px;
+
+      h3 small {
+        margin-left: 8px;
+        font-size: 14px;
+        color: var(--text-secondary);
+      }
+
+      .modal-body {
+        max-height: 75vh;
+        overflow-y: auto;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      .changelog-release {
+        padding: 12px 16px;
+        margin-bottom: 14px;
+        border: 1px solid var(--border-light);
+        border-radius: 6px;
+        background: var(--bg-primary);
+
+        &.is-new {
+          border-color: var(--fav-label-1);
+          box-shadow: inset 4px 0 0 var(--fav-label-1);
+        }
+
+        h5 {
+          margin: 12px 0 4px;
+          font-size: 14px;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          color: var(--text-secondary);
+        }
+
+        ul {
+          margin: 0 0 0 20px;
+        }
+
+        li {
+          margin-bottom: 6px;
+        }
+
+        code {
+          font-size: 13px;
+          padding: 1px 4px;
+          color: var(--text-primary);
+          background: var(--bg-tertiary);
+          border: none;
+        }
+      }
+
+      .changelog-release-header {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+      }
+
+      .changelog-version {
+        font-size: 18px;
+        font-weight: bold;
+      }
+
+      .changelog-date {
+        color: var(--text-secondary);
+      }
+
+      .changelog-new-badge {
+        padding: 1px 8px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: bold;
+        color: white;
+        background: linear-gradient(135deg, #00a37f 0%, #006a92 100%);
+      }
+
+      .changelog-older-title {
+        margin: 22px 0 10px;
+        font-size: 15px;
+        color: var(--text-secondary);
+      }
+    }
+
+    /* Update notice: non-blocking card shown once after an update */
+    #changelog-update-notice {
+      position: fixed;
+      left: 16px;
+      bottom: 16px;
+      z-index: 1039;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      width: 300px;
+      padding: 14px 36px 14px 18px;
+      border: 1px solid var(--border-medium);
+      border-radius: 8px;
+      background: var(--bg-panel);
+      color: var(--text-primary);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+      overflow: hidden;
+      animation: changelog-notice-in 0.35s ease-out;
+
+      &:before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 5px;
+        background: linear-gradient(180deg, #00CC9F 0%, #0088B2 100%);
+      }
+
+      .changelog-notice-logo {
+        width: 40px;
+        height: 40px;
+        flex-shrink: 0;
+      }
+
+      .changelog-notice-title {
+        font-size: 15px;
+        font-weight: bold;
+      }
+
+      .changelog-notice-version {
+        margin: 2px 0 10px;
+        font-size: 14px;
+        font-family: monospace;
+        color: var(--text-secondary);
+      }
+
+      .changelog-notice-open {
+        font-size: 13px;
+      }
+
+      .changelog-notice-close {
+        position: absolute;
+        top: 6px;
+        right: 10px;
+        color: var(--text-primary);
+        opacity: 0.6;
+        text-shadow: none;
+
+        &:hover {
+          opacity: 0.9;
+        }
+      }
+    }
+
+    @keyframes changelog-notice-in {
+      from {
+        opacity: 0;
+        transform: translateY(16px);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      #changelog-update-notice {
+        animation: none;
+      }
+    }
+
     /* ArpyEnhance navbar branding */
     .nav.arpy-enhance-nav {
       margin-left: 30px !important;
@@ -1186,6 +1404,20 @@
 
         span:not(.settings-icon) {
           font-size: 13px;
+        }
+
+        .changelog-unseen-dot {
+          display: none;
+        }
+
+        &.has-unseen .changelog-unseen-dot {
+          display: inline-block;
+          width: 9px;
+          height: 9px;
+          margin-left: -2px;
+          border-radius: 50%;
+          background: #ffd23f;
+          box-shadow: 0 0 0 2px rgba(0,0,0,0.2);
         }
       }
 
@@ -1561,17 +1793,11 @@
   position: relative;
 }
 
-/* Host for Monaco's hover/suggest widgets, appended to <body> so they are not
-   clipped by the editor wrapper. Sits above the fixed navbar (1030) and the
-   advanced selector (1000), but below the Bootstrap modal backdrop (1040) so
-   an open modal still covers it. Zero-sized: the widgets inside are fixed. */
-.arpy-monaco-overflow-widgets {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 0;
-  height: 0;
-  z-index: 1035;
+/* Monaco's fixed-positioned hover/suggest widgets: above the fixed navbar (1030)
+   and the advanced selector (1000), but below the Bootstrap modal backdrop (1040)
+   so an open modal still covers them. */
+#monaco-editor-container .overflowingContentWidgets > * {
+  z-index: 1035 !important;
 }
 
 /* Monaco pins an inline width and height on the hover when it first renders.
@@ -1667,13 +1893,73 @@
   flex-direction: column;
 
   .advanced-selector-section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     font-weight: bold;
     color: var(--text-primary);
     margin-bottom: 8px;
-    padding-bottom: 4px;
+    padding-bottom: 6px;
     border-bottom: 1px solid var(--border-medium);
     flex-shrink: 0;
   }
+
+  .advanced-selector-step {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    font-size: 13px;
+    color: white;
+    background: var(--btn-primary);
+    flex-shrink: 0;
+  }
+
+  .advanced-selector-step-hint {
+    margin-left: auto;
+    font-size: 12px;
+    font-weight: normal;
+    color: var(--text-secondary);
+  }
+}
+
+.advanced-selector-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 20px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border-light);
+  background: var(--bg-secondary);
+  border-radius: 0 0 4px 4px;
+  font-size: 13px;
+  color: var(--text-secondary);
+
+  .advanced-selector-mode-label {
+    font-weight: bold;
+    color: var(--text-primary);
+  }
+
+  kbd {
+    display: inline-block;
+    min-width: 12px;
+    padding: 1px 5px;
+    border: 1px solid var(--border-medium);
+    border-bottom-width: 2px;
+    border-radius: 3px;
+    font-family: monospace;
+    font-size: 12px;
+    text-align: center;
+    color: var(--text-primary);
+    background: var(--bg-primary);
+  }
+}
+
+.advanced-selector-dropdown.is-pick-mode {
+  position: fixed;
+  z-index: 1020;
 }
 
 .advanced-selector-list {

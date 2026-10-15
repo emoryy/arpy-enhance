@@ -39,6 +39,7 @@ A dátumokat meg lehet adni címkeként is.
 Ha munkaidő bejegyzést tartalmazó sorban szimplán csak egy kötőjelet adunk meg dátum helyett, akkor a legutóbbi dátum címke értéke lesz érvényes rá.
 Egy sorban a sor elején explicit módon megadott dátum nem íródik felül címke értékkel.
 Ha kötőjeles dátumos sor előtt nem szerepelt még dátumcímke, akkor a mai nap lesz megadva dátumként.
+Ha a beállításokban be van kapcsolva az "Átnézett napok jelölése", egy nap átnézettnek jelölhető, ha a dátumcímke után egy ✓ (vagy gépelve: ok) áll, pl. "07-01 ✓". Az átnézett nap bejegyzései a szerkesztőben kiszürkülnek, az előnézetben a dátum mellett ✓ jelenik meg. A dátumcímke fölötti kattintható felirattal a jelölés ki-be kapcsolható. A jelölés a beküldött adatokat nem befolyásolja.
 
 példa:
 # ez a mai napon volt

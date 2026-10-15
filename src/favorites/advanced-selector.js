@@ -4,12 +4,16 @@
  */
 
 import { favorites, saveFavorites, renderFavs, getFullLabelPartsForFav } from './favorites-manager.js';
+import { setTimelogCategory } from '../utils/timelog-form.js';
+import { status } from '../utils/dom-helpers.js';
 
 // State management
 let selectedProjectId = null;
 let selectedTodoListId = null;
 let selectedTodoItemIds = new Set(); // Multi-select for items
 let isDropdownOpen = false;
+// 'favorites': add / remove favorites; 'pick': select one todo item into the timelog form dropdowns
+let selectorMode = 'favorites';
 
 // Data cache for search
 let allProjects = [];
@@ -124,7 +128,12 @@ export function setupAdvancedSelector() {
   // Toggle dropdown
   triggerBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    toggleDropdown();
+    toggleDropdown('favorites');
+  });
+
+  document.getElementById('pick-category-button')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleDropdown('pick');
   });
 
   // Close dropdown when clicking outside
@@ -174,23 +183,32 @@ export function setupAdvancedSelector() {
 /**
  * Toggle dropdown visibility
  */
-function toggleDropdown() {
-  if (isDropdownOpen) {
+function toggleDropdown(mode) {
+  if (isDropdownOpen && selectorMode === mode) {
     closeDropdown();
   } else {
-    openDropdown();
+    openDropdown(mode);
   }
 }
 
 /**
  * Open dropdown
  */
-function openDropdown() {
+function openDropdown(mode) {
   const dropdown = document.getElementById('advanced-selector-dropdown');
   const searchInput = document.getElementById('advanced-selector-search');
+  if (mode !== selectorMode) {
+    // The columns were rendered for the other mode (action buttons, multi-selection)
+    resetColumns();
+  }
+  selectorMode = mode;
+  applyModeLayout(dropdown);
   dropdown.style.display = 'block';
   isDropdownOpen = true;
   loadProjects();
+  if (mode === 'pick') {
+    preselectTimelogSelection();
+  }
 
   // Focus search input
   setTimeout(() => {
@@ -198,6 +216,97 @@ function openDropdown() {
       searchInput.focus();
     }
   }, 100);
+}
+
+function resetColumns() {
+  selectedProjectId = null;
+  selectedTodoListId = null;
+  selectedTodoItemIds.clear();
+  previousSearchTerms = ['', '', ''];
+  document.getElementById('advanced-selector-categories').innerHTML = '<div class="advanced-selector-info">Válassz projektet</div>';
+  document.getElementById('advanced-selector-items').innerHTML = '<div class="advanced-selector-info">Válassz todo listát</div>';
+}
+
+/**
+ * In pick mode the dropdown opens below the timelog form's dropdowns instead of the favorites panel.
+ * It is moved under <body> with fixed positioning so the editor panel's overflow does not clip it.
+ */
+function applyModeLayout(dropdown) {
+  const isPick = selectorMode === 'pick';
+  document.getElementById('advanced-selector-mode-label').textContent = isPick ? 'Kiválasztás a lenyílókba' : 'Kedvencek kezelése';
+  document.getElementById('advanced-selector-enter-action').textContent = isPick ? 'vagy kattintás: kiválasztás' : 'hozzáadás / eltávolítás';
+  dropdown.classList.toggle('is-pick-mode', isPick);
+  const content = dropdown.querySelector('.advanced-selector-content');
+
+  if (!isPick) {
+    document.getElementById('favorites-container').appendChild(dropdown);
+    dropdown.style.top = dropdown.style.left = dropdown.style.right = '';
+    content.style.maxHeight = '';
+    return;
+  }
+
+  document.body.appendChild(dropdown);
+  const anchorRect = document.getElementById('pick-category-button').getBoundingClientRect();
+  const panelRect = document.getElementById('time_entry_container').getBoundingClientRect();
+  const top = anchorRect.bottom + 6;
+  dropdown.style.top = `${top}px`;
+  dropdown.style.left = `${Math.max(panelRect.left, 16)}px`;
+  dropdown.style.right = '16px';
+  content.style.maxHeight = `${Math.max(window.innerHeight - top - 150, 220)}px`;
+}
+
+/**
+ * Pick mode: start from what the timelog form currently has selected
+ */
+async function preselectTimelogSelection() {
+  const projectId = $('#project_id').val();
+  const todoListId = $('#todo_list_id').val();
+  const todoItemId = $('#todo_item_id').val();
+  const searchInput = document.getElementById('advanced-selector-search');
+  const userStartedSearching = () => searchInput.value.trim() !== '' || selectorMode !== 'pick';
+
+  if (!projectId) {
+    return;
+  }
+  selectedProjectId = projectId;
+  markSelected('#advanced-selector-projects', projectId);
+  await loadTodoLists(projectId);
+  if (userStartedSearching() || !todoListId || !loadedTodoLists.some((list) => list.id == todoListId)) {
+    return;
+  }
+  selectedTodoListId = todoListId;
+  markSelected('#advanced-selector-categories', todoListId);
+  await loadTodoItems(todoListId);
+  if (userStartedSearching() || !todoItemId) {
+    return;
+  }
+  markSelected('#advanced-selector-items', todoItemId);
+}
+
+function markSelected(containerSelector, id) {
+  const element = document.querySelector(`${containerSelector} .advanced-selector-item[data-id="${id}"]`);
+  if (element) {
+    element.classList.add('selected');
+    element.scrollIntoView({ block: 'nearest' });
+  }
+}
+
+/**
+ * Pick mode: apply the chosen todo item (with the selected project and todo list) to the timelog form
+ */
+async function pickTodoItem(todoItemId) {
+  const projectId = selectedProjectId;
+  const todoListId = selectedTodoListId;
+  if (!projectId || !todoListId) {
+    return;
+  }
+  closeDropdown();
+  try {
+    await setTimelogCategory(projectId, todoListId, todoItemId);
+  } catch (error) {
+    console.error('ArpyEnhance: could not apply the picked category', error);
+    status('Nem sikerült beállítani a kiválasztott kategóriát a lenyílókban.', 'error');
+  }
 }
 
 /**
@@ -224,6 +333,11 @@ function closeDropdown() {
 function handleEnterKey() {
   const selectedItem = document.querySelector('#advanced-selector-items .advanced-selector-item.selected');
   if (!selectedItem) return;
+
+  if (selectorMode === 'pick') {
+    pickTodoItem(selectedItem.dataset.id);
+    return;
+  }
 
   const addBtn = selectedItem.querySelector('.btn-success');
   const removeBtn = selectedItem.querySelector('.btn-danger');
@@ -714,7 +828,7 @@ function createSelectableItem(config) {
   item.appendChild(itemLabel);
 
   // Only show action buttons for todo items
-  if (type === 'todoItem') {
+  if (type === 'todoItem' && selectorMode === 'favorites') {
     const actions = document.createElement('div');
     actions.className = 'advanced-selector-item-actions';
 
@@ -789,6 +903,8 @@ function handleItemClick(type, id, itemElement, multiSelect) {
 
     // Load todo items
     loadTodoItems(id);
+  } else if (type === 'todoItem' && selectorMode === 'pick') {
+    pickTodoItem(id);
   } else if (type === 'todoItem' && multiSelect) {
     // Multi select - toggle selection
     itemElement.classList.toggle('selected');

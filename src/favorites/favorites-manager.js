@@ -336,3 +336,130 @@ export function setupClearInvalidButton() {
     }
   });
 }
+
+const FAVORITES_EXPORT_FORMAT = 'arpy-enhance-favorites';
+
+function favTripleKey(fav) {
+  return ['project_id', 'todo_list_id', 'todo_item_id'].map((key) => fav[key]?.value ?? '').join('/');
+}
+
+/**
+ * Download all favorites as a JSON file
+ */
+export function exportFavorites() {
+  const data = {
+    format: FAVORITES_EXPORT_FORMAT,
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    favorites: favorites.map(({ isInvalid, ...fav }) => fav),
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `arpy-favorites-${data.exportedAt.slice(0, 10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  status(`${favorites.length} kedvenc exportálva.`);
+}
+
+/**
+ * Merge favorites from an exported JSON (a favorites export, an Arpy pool
+ * export, or a bare array) into the current list.
+ * Matching is by project / todo list / todo item ids. Existing labels are
+ * never overwritten; an incoming label only fills an empty one. An incoming
+ * favorite whose label is already used for a different target is skipped,
+ * because the batch parser resolves labels by first match.
+ */
+export function mergeFavorites(incoming) {
+  const result = { added: 0, labeled: 0, unchanged: 0, conflicts: [], invalid: 0 };
+  const byTriple = new Map(favorites.map((fav) => [favTripleKey(fav), fav]));
+  const labelOwner = new Map(favorites.filter((fav) => fav.label).map((fav) => [fav.label, favTripleKey(fav)]));
+  const usedIds = new Set(favorites.map((fav) => fav.id));
+
+  incoming.forEach((raw) => {
+    if (!raw?.project_id?.value) {
+      result.invalid++;
+      return;
+    }
+    const key = favTripleKey(raw);
+    const label = (raw.label || '').trim();
+    const owner = label && labelOwner.get(label);
+    if (owner && owner !== key) {
+      result.conflicts.push(label);
+      return;
+    }
+    const existing = byTriple.get(key);
+    if (existing) {
+      if (!existing.label && label) {
+        existing.label = label;
+        labelOwner.set(label, key);
+        result.labeled++;
+      } else {
+        result.unchanged++;
+      }
+      return;
+    }
+    let id = raw.id && !usedIds.has(raw.id) ? raw.id : null;
+    while (!id || usedIds.has(id)) {
+      id = `${Date.now()}${Math.round(Math.random() * 1000)}`;
+    }
+    const fav = { label, id };
+    ['project_id', 'todo_list_id', 'todo_item_id'].forEach((prop) => {
+      if (raw[prop]?.value) {
+        fav[prop] = { label: raw[prop].label, value: String(raw[prop].value) };
+      }
+    });
+    favorites.push(fav);
+    byTriple.set(key, fav);
+    usedIds.add(id);
+    if (label) labelOwner.set(label, key);
+    result.added++;
+  });
+  return result;
+}
+
+async function importFavoritesFile(file) {
+  let parsed;
+  try {
+    parsed = JSON.parse(await file.text());
+  } catch (e) {
+    status(`Hibás JSON fájl: ${file.name}`, 'error');
+    return;
+  }
+  const incoming = Array.isArray(parsed) ? parsed : parsed?.favorites;
+  if (!Array.isArray(incoming)) {
+    status(`A fájlban nincs kedvenc lista: ${file.name}`, 'error');
+    return;
+  }
+  const result = mergeFavorites(incoming);
+  saveFavorites();
+  await checkFavoritesValidity();
+  renderFavs();
+  updateClearButtonVisibility();
+  if (applyQuickFilter) {
+    applyQuickFilter();
+  }
+  const parts = [`${result.added} új`, `${result.labeled} címkézve`, `${result.unchanged} változatlan`];
+  if (result.invalid) parts.push(`${result.invalid} hibás`);
+  if (result.conflicts.length) parts.push(`${result.conflicts.length} címkeütközés miatt kihagyva: ${result.conflicts.join(', ')}`);
+  status(`Kedvencek importálva: ${parts.join(', ')}.`, result.conflicts.length || result.invalid ? 'error' : '');
+}
+
+/**
+ * Setup favorites export / import button handlers
+ */
+export function setupFavoritesImportExport() {
+  $('#export-favs-button').on('click', exportFavorites);
+  const fileInput = $('#import-favs-input');
+  $('#import-favs-button').on('click', () => fileInput.trigger('click'));
+  fileInput.on('change', async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (file) {
+      await importFavoritesFile(file);
+    }
+  });
+}

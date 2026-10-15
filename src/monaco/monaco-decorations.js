@@ -6,6 +6,7 @@
 
 import { settingsManager } from '../settings/settings-manager.js';
 import { monacoEditorInstance } from './monaco-setup.js';
+import { DATE_LINE_RE } from '../constants.js';
 
 // Track decorations collection
 let editorDecorationsCollection = null;
@@ -85,8 +86,8 @@ export function updateEditorDecorations(summarizedData) {
   for (let lineNumber = 1; lineNumber <= lineCount; lineNumber++) {
     const lineContent = model.getLineContent(lineNumber).trim();
 
-    // Check if this line is a date label (matches YYYY-MM-DD or MM-DD)
-    const dateMatch = lineContent.match(/^(\d{4}-\d{2}-\d{2}|\d{2}-\d{2})$/);
+    // Check if this line is a date label (YYYY-MM-DD or MM-DD, optionally with the reviewed marker)
+    const dateMatch = lineContent.match(DATE_LINE_RE);
     if (dateMatch) {
       const dateStr = dateMatch[1];
       // Normalize to YYYY-MM-DD format if needed
